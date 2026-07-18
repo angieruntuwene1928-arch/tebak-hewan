@@ -208,7 +208,6 @@ export default function Home() {
     };
   }, [screen, currentAnimal]);
 
-  // confetti meriah pas layar hasil akhir
   useEffect(() => {
     if (screen !== "finished") return;
     const end = Date.now() + 3000;
@@ -231,7 +230,16 @@ export default function Home() {
     lastAnimalId.current = null;
     setScreen("game");
     generateRound();
-    bgmRef.current?.play().catch(() => {});
+    if (bgmRef.current) {
+      console.log("BGM src:", bgmRef.current.currentSrc || bgmRef.current.src);
+      console.log("BGM readyState:", bgmRef.current.readyState);
+      bgmRef.current
+        .play()
+        .then(() => console.log("BGM play() succeeded"))
+        .catch((err) => console.error("BGM play() failed:", err));
+    } else {
+      console.error("BGM ref is null - audio element not mounted");
+    }
   };
 
   const fireConfetti = () => {
@@ -274,7 +282,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-200 to-lime-200">
-      <audio ref={bgmRef} src="/music/bgm.mp3" loop muted={!bgmEnabled} />
+      <audio ref={bgmRef} src="/music/bgm.mp3" loop muted={!bgmEnabled} preload="auto" />
 
       <div className="pointer-events-none select-none absolute inset-0 text-6xl opacity-30 flex flex-wrap content-start gap-8 p-6">
         <span>🌳</span><span>🦁</span><span>🌴</span><span>🐘</span>
