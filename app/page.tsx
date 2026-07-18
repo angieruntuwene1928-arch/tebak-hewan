@@ -52,10 +52,8 @@ async function fetchAnimalVideo(query: string): Promise<string | null> {
   try {
     const res = await fetch(`/api/animal-video?q=${encodeURIComponent(query)}`);
     const data = await res.json();
-    console.log("VIDEO FETCH RESULT for", query, "=>", data);
     return data?.url ?? null;
-  } catch (err) {
-    console.log("VIDEO FETCH ERROR", err);
+  } catch {
     return null;
   }
 }
@@ -65,6 +63,7 @@ export default function Home() {
   const [prevScreen, setPrevScreen] = useState<Screen>("menu");
   const [volume, setVolume] = useState(0.8);
   const [answerCount, setAnswerCount] = useState(4);
+  const [bgmEnabled, setBgmEnabled] = useState(true);
 
   const [currentAnimal, setCurrentAnimal] = useState<Animal | null>(null);
   const [question, setQuestion] = useState("");
@@ -78,7 +77,6 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFailed, setVideoFailed] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
 
   const [roundNumber, setRoundNumber] = useState(1);
   const [correctCount, setCorrectCount] = useState(0);
@@ -88,10 +86,17 @@ export default function Home() {
   const roundNumberRef = useRef(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rewardVideoRef = useRef<HTMLVideoElement | null>(null);
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     roundNumberRef.current = roundNumber;
   }, [roundNumber]);
+
+  useEffect(() => {
+    if (bgmRef.current) {
+      bgmRef.current.muted = !bgmEnabled;
+    }
+  }, [bgmEnabled]);
 
   const speak = useCallback(
     (text: string) => {
@@ -140,7 +145,6 @@ export default function Home() {
     setTimedOut(false);
     setVideoUrl(null);
     setVideoFailed(false);
-    setIsMuted(true);
 
     setTimeout(() => speak(desc), 300);
   }, [answerCount, speak]);
@@ -204,6 +208,22 @@ export default function Home() {
     };
   }, [screen, currentAnimal]);
 
+  // confetti meriah pas layar hasil akhir
+  useEffect(() => {
+    if (screen !== "finished") return;
+    const end = Date.now() + 3000;
+    let frameId: number;
+    const frame = () => {
+      confetti({ particleCount: 4, angle: 60, spread: 60, origin: { x: 0, y: 0.6 } });
+      confetti({ particleCount: 4, angle: 120, spread: 60, origin: { x: 1, y: 0.6 } });
+      if (Date.now() < end) {
+        frameId = requestAnimationFrame(frame);
+      }
+    };
+    frame();
+    return () => cancelAnimationFrame(frameId);
+  }, [screen]);
+
   const startGame = () => {
     setRoundNumber(1);
     setCorrectCount(0);
@@ -211,6 +231,7 @@ export default function Home() {
     lastAnimalId.current = null;
     setScreen("game");
     generateRound();
+    bgmRef.current?.play().catch(() => {});
   };
 
   const fireConfetti = () => {
@@ -253,6 +274,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-200 to-lime-200">
+      <audio ref={bgmRef} src="/music/bgm.mp3" loop muted={!bgmEnabled} />
+
       <div className="pointer-events-none select-none absolute inset-0 text-6xl opacity-30 flex flex-wrap content-start gap-8 p-6">
         <span>🌳</span><span>🦁</span><span>🌴</span><span>🐘</span>
         <span>☁️</span><span>🦒</span><span>🌳</span><span>🐵</span>
@@ -350,25 +373,16 @@ export default function Home() {
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
             {videoUrl && !videoFailed ? (
-              <div className="relative w-full h-full">
-                <video
-                  key={currentAnimal.id}
-                  ref={rewardVideoRef}
-                  src={videoUrl}
-                  autoPlay
-                  loop
-                  muted={isMuted}
-                  playsInline
-                  onError={() => setVideoFailed(true)}
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  onClick={() => setIsMuted((m) => !m)}
-                  className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center text-lg"
-                >
-                  {isMuted ? "🔇" : "🔊"}
-                </button>
-              </div>
+              <video
+                key={currentAnimal.id}
+                ref={rewardVideoRef}
+                src={videoUrl}
+                autoPlay
+                loop
+                playsInline
+                onError={() => setVideoFailed(true)}
+                className="w-full h-full object-cover"
+              />
             ) : videoLoading ? (
               <div className="text-6xl animate-pulse">⏳</div>
             ) : (
@@ -444,6 +458,18 @@ export default function Home() {
               </label>
               <input type="range" min={0} max={1} step={0.05} value={volume}
                 onChange={(e) => setVolume(parseFloat(e.target.value))} />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="font-semibold text-slate-600">🎵 Musik Latar</label>
+              <button
+                onClick={() => setBgmEnabled((b) => !b)}
+                className={`px-5 py-2 rounded-full font-bold text-white transition ${
+                  bgmEnabled ? "bg-green-400" : "bg-slate-300"
+                }`}
+              >
+                {bgmEnabled ? "Nyala" : "Mati"}
+              </button>
             </div>
 
             <div className="flex flex-col gap-2">
