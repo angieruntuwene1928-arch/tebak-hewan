@@ -36,6 +36,9 @@ const videoQueryMap: Record<string, string> = {
   kucing: "cat", anjing: "dog", lumba_lumba: "dolphin",
 };
 
+// hewan yang pakai foto asli (bukan emoji) di pilihan jawaban
+const REAL_PHOTO_IDS = ["koala", "ular_kobra"];
+
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
 type Choice = { id: string; name: string; emoji: string };
 
@@ -58,6 +61,16 @@ async function fetchAnimalVideo(query: string): Promise<string | null> {
   }
 }
 
+async function fetchAnimalImage(query: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/animal-image?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    return data?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("menu");
   const [prevScreen, setPrevScreen] = useState<Screen>("menu");
@@ -70,6 +83,8 @@ export default function Home() {
   const [choices, setChoices] = useState<Choice[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [wrongId, setWrongId] = useState<string | null>(null);
+
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
 
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
   const [timedOut, setTimedOut] = useState(false);
@@ -148,6 +163,19 @@ export default function Home() {
 
     setTimeout(() => speak(desc), 300);
   }, [answerCount, speak]);
+
+  useEffect(() => {
+    choices.forEach((c) => {
+      if (REAL_PHOTO_IDS.includes(c.id) && !photoUrls[c.id]) {
+        const query = videoQueryMap[c.id] ?? c.name;
+        fetchAnimalImage(query).then((url) => {
+          if (url) {
+            setPhotoUrls((prev) => ({ ...prev, [c.id]: url }));
+          }
+        });
+      }
+    });
+  }, [choices, photoUrls]);
 
   const goToNextOrFinish = useCallback(() => {
     rewardVideoRef.current?.pause();
@@ -345,14 +373,23 @@ export default function Home() {
               const isCorrectChoice = currentAnimal.id === c.id;
               const showCorrectHighlight = !!selectedId && isCorrectChoice;
               const showWrongHighlight = wrongId === c.id;
+              const hasRealPhoto = REAL_PHOTO_IDS.includes(c.id) && photoUrls[c.id];
               return (
                 <button key={c.id} onClick={() => handleChoice(c.id)}
                   disabled={!!selectedId || timedOut}
-                  className={`w-28 h-28 md:w-36 md:h-36 rounded-3xl bg-white shadow-lg flex flex-col items-center justify-center gap-1 text-5xl md:text-6xl transition
+                  className={`w-28 h-28 md:w-36 md:h-36 rounded-3xl bg-white shadow-lg flex flex-col items-center justify-center gap-1 text-5xl md:text-6xl transition overflow-hidden
                     ${showWrongHighlight ? "animate-shake bg-red-200" : ""}
                     ${showCorrectHighlight ? "bg-green-200 scale-105 ring-4 ring-green-400" : ""}
                     ${!selectedId ? "hover:scale-105" : ""}`}>
-                  <span>{c.emoji}</span>
+                  {hasRealPhoto ? (
+                    <img
+                      src={photoUrls[c.id]}
+                      alt={c.name}
+                      className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-2xl"
+                    />
+                  ) : (
+                    <span>{c.emoji}</span>
+                  )}
                   <span className="text-xs md:text-sm font-bold text-slate-600">{c.name}</span>
                 </button>
               );
