@@ -25,6 +25,40 @@ const emojiMap: Record<string, string> = {
   kucing: "🐱", anjing: "🐶", lumba_lumba: "🐬",
 };
 
+// Query bahasa Inggris yang akurat buat tiap hewan, biar hasil gif Giphy tepat
+const giphyQueryMap: Record<string, string> = {
+  singa: "lion wild animal",
+  gajah: "elephant wild animal",
+  jerapah: "giraffe wild animal",
+  zebra: "zebra wild animal",
+  harimau: "tiger wild animal",
+  panda: "panda bear",
+  koala: "koala bear",
+  kanguru: "kangaroo animal",
+  buaya: "crocodile animal",
+  gorila: "gorilla animal",
+  rusa: "deer animal",
+  kuda_nil: "hippopotamus animal",
+  badak: "rhino rhinoceros animal",
+  unta: "camel animal",
+  rubah: "fox animal",
+  serigala: "wolf animal",
+  beruang: "bear animal",
+  elang: "eagle bird",
+  burung_unta: "ostrich bird",
+  penguin: "penguin bird",
+  flamingo: "flamingo bird",
+  merak: "peacock bird",
+  ular_kobra: "cobra snake",
+  kura_kura: "turtle tortoise",
+  kelinci: "rabbit bunny",
+  tupai: "squirrel animal",
+  landak: "hedgehog animal",
+  kucing: "cat kitten",
+  anjing: "dog puppy",
+  lumba_lumba: "dolphin ocean",
+};
+
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
 type Choice = { id: string; name: string; emoji: string };
 
@@ -161,7 +195,7 @@ export default function Home() {
     };
   }, [screen, selectedId, timedOut, handleTimeout]);
 
-  // Ambil gif dari Giphy otomatis begitu masuk layar result
+  // Ambil gif dari Giphy otomatis begitu masuk layar result, pakai query bahasa Inggris
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
 
@@ -172,17 +206,19 @@ export default function Home() {
     }
 
     let cancelled = false;
+    const query = giphyQueryMap[currentAnimal.id] ?? currentAnimal.name;
 
     fetch(
       `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(
-        currentAnimal.name + " animal"
-      )}&limit=1&rating=g`
+        query
+      )}&limit=5&rating=g&lang=en`
     )
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        const url = data?.data?.[0]?.images?.downsized?.url;
-        if (url) setGifUrl(url);
+        const results = data?.data ?? [];
+        const first = results.find((r: any) => r?.images?.downsized?.url);
+        if (first) setGifUrl(first.images.downsized.url);
         else setGifFailed(true);
       })
       .catch(() => {
