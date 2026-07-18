@@ -25,70 +25,37 @@ const emojiMap: Record<string, string> = {
   kucing: "🐱", anjing: "🐶", lumba_lumba: "🐬",
 };
 
-const giphyQueryMap: Record<string, string> = {
-  singa: "lion wildlife nature",
-  gajah: "elephant wildlife nature",
-  jerapah: "giraffe wildlife nature",
-  zebra: "zebra wildlife nature",
-  harimau: "tiger wildlife nature",
-  panda: "panda bear wildlife",
-  koala: "koala wildlife nature",
-  kanguru: "kangaroo wildlife nature",
-  buaya: "crocodile wildlife nature",
-  gorila: "gorilla wildlife nature",
-  rusa: "deer wildlife nature",
-  kuda_nil: "hippo hippopotamus wildlife",
-  badak: "rhino rhinoceros wildlife",
-  unta: "camel desert wildlife",
-  rubah: "fox wildlife nature",
-  serigala: "wolf wildlife nature",
-  beruang: "bear wildlife nature",
-  elang: "eagle bird wildlife",
-  burung_unta: "ostrich bird wildlife",
-  penguin: "penguin wildlife nature",
-  flamingo: "flamingo bird wildlife",
-  merak: "peacock bird wildlife",
-  ular_kobra: "cobra snake wildlife",
-  kura_kura: "turtle tortoise wildlife",
-  kelinci: "rabbit bunny wildlife",
-  tupai: "squirrel wildlife nature",
-  landak: "hedgehog wildlife nature",
-  kucing: "cat kitten cute",
-  anjing: "dog puppy cute",
-  lumba_lumba: "dolphin ocean wildlife",
-};
-
-const giphyKeywordMap: Record<string, string[]> = {
-  singa: ["lion"],
-  gajah: ["elephant"],
-  jerapah: ["giraffe"],
-  zebra: ["zebra"],
-  harimau: ["tiger"],
-  panda: ["panda"],
-  koala: ["koala"],
-  kanguru: ["kangaroo"],
-  buaya: ["crocodile", "alligator"],
-  gorila: ["gorilla"],
-  rusa: ["deer"],
-  kuda_nil: ["hippo"],
-  badak: ["rhino"],
-  unta: ["camel"],
-  rubah: ["fox"],
-  serigala: ["wolf"],
-  beruang: ["bear"],
-  elang: ["eagle"],
-  burung_unta: ["ostrich"],
-  penguin: ["penguin"],
-  flamingo: ["flamingo"],
-  merak: ["peacock"],
-  ular_kobra: ["cobra", "snake"],
-  kura_kura: ["turtle", "tortoise"],
-  kelinci: ["rabbit", "bunny"],
-  tupai: ["squirrel"],
-  landak: ["hedgehog"],
-  kucing: ["cat", "kitten"],
-  anjing: ["dog", "puppy"],
-  lumba_lumba: ["dolphin"],
+const wikiTitleMap: Record<string, string> = {
+  singa: "Lion",
+  gajah: "African bush elephant",
+  jerapah: "Giraffe",
+  zebra: "Plains zebra",
+  harimau: "Tiger",
+  panda: "Giant panda",
+  koala: "Koala",
+  kanguru: "Kangaroo",
+  buaya: "Crocodile",
+  gorila: "Gorilla",
+  rusa: "Deer",
+  kuda_nil: "Hippopotamus",
+  badak: "Rhinoceros",
+  unta: "Camel",
+  rubah: "Red fox",
+  serigala: "Wolf",
+  beruang: "Bear",
+  elang: "Eagle",
+  burung_unta: "Common ostrich",
+  penguin: "Penguin",
+  flamingo: "Flamingo",
+  merak: "Peafowl",
+  ular_kobra: "Cobra",
+  kura_kura: "Tortoise",
+  kelinci: "Rabbit",
+  tupai: "Squirrel",
+  landak: "Hedgehog",
+  kucing: "Cat",
+  anjing: "Dog",
+  lumba_lumba: "Dolphin",
 };
 
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
@@ -118,8 +85,8 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
   const [timedOut, setTimedOut] = useState(false);
 
-  const [gifUrl, setGifUrl] = useState<string | null>(null);
-  const [gifFailed, setGifFailed] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoFailed, setPhotoFailed] = useState(false);
   const [audioFailed, setAudioFailed] = useState(false);
 
   const [roundNumber, setRoundNumber] = useState(1);
@@ -180,8 +147,8 @@ export default function Home() {
     setWrongId(null);
     setTimeLeft(ROUND_TIME);
     setTimedOut(false);
-    setGifUrl(null);
-    setGifFailed(false);
+    setPhotoUrl(null);
+    setPhotoFailed(false);
     setAudioFailed(false);
 
     setTimeout(() => speak(desc), 300);
@@ -230,42 +197,21 @@ export default function Home() {
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
 
-    const apiKey = process.env.NEXT_PUBLIC_GIPHY_API_KEY;
-    if (!apiKey) {
-      setGifFailed(true);
-      return;
-    }
-
     let cancelled = false;
-    const query = giphyQueryMap[currentAnimal.id] ?? currentAnimal.name;
-    const keywords = giphyKeywordMap[currentAnimal.id] ?? [];
+    const title = wikiTitleMap[currentAnimal.id] ?? currentAnimal.name;
 
     fetch(
-      `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(
-        query
-      )}&limit=25&rating=g&lang=en`
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
     )
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        const results = data?.data ?? [];
-
-        const validMatch = results.find((r: any) => {
-          const title: string = (r?.title || "").toLowerCase();
-          const url = r?.images?.downsized?.url;
-          if (!url) return false;
-          if (keywords.length === 0) return true;
-          return keywords.some((kw) => title.includes(kw));
-        });
-
-        if (validMatch) {
-          setGifUrl(validMatch.images.downsized.url);
-        } else {
-          setGifFailed(true);
-        }
+        const url = data?.originalimage?.source || data?.thumbnail?.source;
+        if (url) setPhotoUrl(url);
+        else setPhotoFailed(true);
       })
       .catch(() => {
-        if (!cancelled) setGifFailed(true);
+        if (!cancelled) setPhotoFailed(true);
       });
 
     return () => {
@@ -418,12 +364,12 @@ export default function Home() {
           </h2>
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
-            {gifUrl && !gifFailed ? (
+            {photoUrl && !photoFailed ? (
               <img
-                key={currentAnimal.id + "-gif"}
-                src={gifUrl}
+                key={currentAnimal.id + "-photo"}
+                src={photoUrl}
                 alt={currentAnimal.name}
-                onError={() => setGifFailed(true)}
+                onError={() => setPhotoFailed(true)}
                 className="w-full h-full object-cover"
               />
             ) : (
