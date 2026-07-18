@@ -25,37 +25,37 @@ const emojiMap: Record<string, string> = {
   kucing: "🐱", anjing: "🐶", lumba_lumba: "🐬",
 };
 
-const wikiTitleMap: Record<string, string> = {
-  singa: "Lion",
-  gajah: "African bush elephant",
-  jerapah: "Giraffe",
-  zebra: "Plains zebra",
-  harimau: "Tiger",
-  panda: "Giant panda",
-  koala: "Koala",
-  kanguru: "Kangaroo",
-  buaya: "Crocodile",
-  gorila: "Gorilla",
-  rusa: "Deer",
-  kuda_nil: "Hippopotamus",
-  badak: "Rhinoceros",
-  unta: "Camel",
-  rubah: "Red fox",
-  serigala: "Wolf",
-  beruang: "Bear",
-  elang: "Eagle",
-  burung_unta: "Common ostrich",
-  penguin: "Penguin",
-  flamingo: "Flamingo",
-  merak: "Peafowl",
-  ular_kobra: "Cobra",
-  kura_kura: "Tortoise",
-  kelinci: "Rabbit",
-  tupai: "Squirrel",
-  landak: "Hedgehog",
-  kucing: "Cat",
-  anjing: "Dog",
-  lumba_lumba: "Dolphin",
+const wikiTitleMap: Record<string, string[]> = {
+  singa: ["Lion"],
+  gajah: ["African bush elephant", "Elephant"],
+  jerapah: ["Giraffe"],
+  zebra: ["Plains zebra", "Zebra"],
+  harimau: ["Tiger"],
+  panda: ["Giant panda"],
+  koala: ["Koala"],
+  kanguru: ["Red kangaroo", "Kangaroo"],
+  buaya: ["Nile crocodile", "Crocodile"],
+  gorila: ["Gorilla"],
+  rusa: ["Red deer", "Deer"],
+  kuda_nil: ["Hippopotamus"],
+  badak: ["White rhinoceros", "Rhinoceros"],
+  unta: ["Dromedary", "Camel"],
+  rubah: ["Red fox"],
+  serigala: ["Wolf", "Gray wolf"],
+  beruang: ["Brown bear", "Bear"],
+  elang: ["Bald eagle", "Eagle"],
+  burung_unta: ["Common ostrich"],
+  penguin: ["Emperor penguin", "Penguin"],
+  flamingo: ["Greater flamingo", "Flamingo"],
+  merak: ["Indian peafowl", "Peafowl"],
+  ular_kobra: ["King cobra", "Indian cobra", "Cobra"],
+  kura_kura: ["Tortoise", "Sea turtle"],
+  kelinci: ["European rabbit", "Rabbit"],
+  tupai: ["Eastern gray squirrel", "Squirrel"],
+  landak: ["Hedgehog"],
+  kucing: ["Cat"],
+  anjing: ["Dog"],
+  lumba_lumba: ["Common bottlenose dolphin", "Dolphin"],
 };
 
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
@@ -68,6 +68,28 @@ function shuffle<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+async function fetchWikiImage(titles: string[]): Promise<string | null> {
+  for (const title of titles) {
+    try {
+      const res = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(
+          title
+        )}&prop=pageimages&format=json&pithumbsize=600&redirects=1&origin=*`
+      );
+      const data = await res.json();
+      const pages = data?.query?.pages;
+      if (pages) {
+        const page: any = Object.values(pages)[0];
+        const url = page?.thumbnail?.source;
+        if (url) return url;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 export default function Home() {
@@ -198,21 +220,13 @@ export default function Home() {
     if (screen !== "result" || !currentAnimal) return;
 
     let cancelled = false;
-    const title = wikiTitleMap[currentAnimal.id] ?? currentAnimal.name;
+    const titles = wikiTitleMap[currentAnimal.id] ?? [currentAnimal.name];
 
-    fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled) return;
-        const url = data?.originalimage?.source || data?.thumbnail?.source;
-        if (url) setPhotoUrl(url);
-        else setPhotoFailed(true);
-      })
-      .catch(() => {
-        if (!cancelled) setPhotoFailed(true);
-      });
+    fetchWikiImage(titles).then((url) => {
+      if (cancelled) return;
+      if (url) setPhotoUrl(url);
+      else setPhotoFailed(true);
+    });
 
     return () => {
       cancelled = true;
