@@ -25,38 +25,70 @@ const emojiMap: Record<string, string> = {
   kucing: "🐱", anjing: "🐶", lumba_lumba: "🐬",
 };
 
-// Query bahasa Inggris yang akurat buat tiap hewan, biar hasil gif Giphy tepat
 const giphyQueryMap: Record<string, string> = {
-  singa: "lion wild animal",
-  gajah: "elephant wild animal",
-  jerapah: "giraffe wild animal",
-  zebra: "zebra wild animal",
-  harimau: "tiger wild animal",
-  panda: "panda bear",
-  koala: "koala bear",
-  kanguru: "kangaroo animal",
-  buaya: "crocodile animal",
-  gorila: "gorilla animal",
-  rusa: "deer animal",
-  kuda_nil: "hippopotamus animal",
-  badak: "rhino rhinoceros animal",
-  unta: "camel animal",
-  rubah: "fox animal",
-  serigala: "wolf animal",
-  beruang: "bear animal",
-  elang: "eagle bird",
-  burung_unta: "ostrich bird",
-  penguin: "penguin bird",
-  flamingo: "flamingo bird",
-  merak: "peacock bird",
-  ular_kobra: "cobra snake",
-  kura_kura: "turtle tortoise",
-  kelinci: "rabbit bunny",
-  tupai: "squirrel animal",
-  landak: "hedgehog animal",
-  kucing: "cat kitten",
-  anjing: "dog puppy",
-  lumba_lumba: "dolphin ocean",
+  singa: "lion wildlife nature",
+  gajah: "elephant wildlife nature",
+  jerapah: "giraffe wildlife nature",
+  zebra: "zebra wildlife nature",
+  harimau: "tiger wildlife nature",
+  panda: "panda bear wildlife",
+  koala: "koala wildlife nature",
+  kanguru: "kangaroo wildlife nature",
+  buaya: "crocodile wildlife nature",
+  gorila: "gorilla wildlife nature",
+  rusa: "deer wildlife nature",
+  kuda_nil: "hippo hippopotamus wildlife",
+  badak: "rhino rhinoceros wildlife",
+  unta: "camel desert wildlife",
+  rubah: "fox wildlife nature",
+  serigala: "wolf wildlife nature",
+  beruang: "bear wildlife nature",
+  elang: "eagle bird wildlife",
+  burung_unta: "ostrich bird wildlife",
+  penguin: "penguin wildlife nature",
+  flamingo: "flamingo bird wildlife",
+  merak: "peacock bird wildlife",
+  ular_kobra: "cobra snake wildlife",
+  kura_kura: "turtle tortoise wildlife",
+  kelinci: "rabbit bunny wildlife",
+  tupai: "squirrel wildlife nature",
+  landak: "hedgehog wildlife nature",
+  kucing: "cat kitten cute",
+  anjing: "dog puppy cute",
+  lumba_lumba: "dolphin ocean wildlife",
+};
+
+const giphyKeywordMap: Record<string, string[]> = {
+  singa: ["lion"],
+  gajah: ["elephant"],
+  jerapah: ["giraffe"],
+  zebra: ["zebra"],
+  harimau: ["tiger"],
+  panda: ["panda"],
+  koala: ["koala"],
+  kanguru: ["kangaroo"],
+  buaya: ["crocodile", "alligator"],
+  gorila: ["gorilla"],
+  rusa: ["deer"],
+  kuda_nil: ["hippo"],
+  badak: ["rhino"],
+  unta: ["camel"],
+  rubah: ["fox"],
+  serigala: ["wolf"],
+  beruang: ["bear"],
+  elang: ["eagle"],
+  burung_unta: ["ostrich"],
+  penguin: ["penguin"],
+  flamingo: ["flamingo"],
+  merak: ["peacock"],
+  ular_kobra: ["cobra", "snake"],
+  kura_kura: ["turtle", "tortoise"],
+  kelinci: ["rabbit", "bunny"],
+  tupai: ["squirrel"],
+  landak: ["hedgehog"],
+  kucing: ["cat", "kitten"],
+  anjing: ["dog", "puppy"],
+  lumba_lumba: ["dolphin"],
 };
 
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
@@ -195,7 +227,6 @@ export default function Home() {
     };
   }, [screen, selectedId, timedOut, handleTimeout]);
 
-  // Ambil gif dari Giphy otomatis begitu masuk layar result, pakai query bahasa Inggris
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
 
@@ -207,19 +238,31 @@ export default function Home() {
 
     let cancelled = false;
     const query = giphyQueryMap[currentAnimal.id] ?? currentAnimal.name;
+    const keywords = giphyKeywordMap[currentAnimal.id] ?? [];
 
     fetch(
       `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(
         query
-      )}&limit=5&rating=g&lang=en`
+      )}&limit=25&rating=g&lang=en`
     )
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
         const results = data?.data ?? [];
-        const first = results.find((r: any) => r?.images?.downsized?.url);
-        if (first) setGifUrl(first.images.downsized.url);
-        else setGifFailed(true);
+
+        const validMatch = results.find((r: any) => {
+          const title: string = (r?.title || "").toLowerCase();
+          const url = r?.images?.downsized?.url;
+          if (!url) return false;
+          if (keywords.length === 0) return true;
+          return keywords.some((kw) => title.includes(kw));
+        });
+
+        if (validMatch) {
+          setGifUrl(validMatch.images.downsized.url);
+        } else {
+          setGifFailed(true);
+        }
       })
       .catch(() => {
         if (!cancelled) setGifFailed(true);
