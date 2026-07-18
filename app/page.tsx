@@ -25,37 +25,15 @@ const emojiMap: Record<string, string> = {
   kucing: "🐱", anjing: "🐶", lumba_lumba: "🐬",
 };
 
-const wikiTitleMap: Record<string, string[]> = {
-  singa: ["Lion"],
-  gajah: ["African bush elephant", "Elephant"],
-  jerapah: ["Giraffe"],
-  zebra: ["Plains zebra", "Zebra"],
-  harimau: ["Tiger"],
-  panda: ["Giant panda"],
-  koala: ["Koala"],
-  kanguru: ["Red kangaroo", "Kangaroo"],
-  buaya: ["Nile crocodile", "Crocodile"],
-  gorila: ["Gorilla"],
-  rusa: ["Red deer", "Deer"],
-  kuda_nil: ["Hippopotamus"],
-  badak: ["White rhinoceros", "Rhinoceros"],
-  unta: ["Dromedary", "Camel"],
-  rubah: ["Red fox"],
-  serigala: ["Wolf", "Gray wolf"],
-  beruang: ["Brown bear", "Bear"],
-  elang: ["Bald eagle", "Eagle"],
-  burung_unta: ["Common ostrich"],
-  penguin: ["Emperor penguin", "Penguin"],
-  flamingo: ["Greater flamingo", "Flamingo"],
-  merak: ["Indian peafowl", "Peafowl"],
-  ular_kobra: ["King cobra", "Indian cobra", "Cobra"],
-  kura_kura: ["Tortoise", "Sea turtle"],
-  kelinci: ["European rabbit", "Rabbit"],
-  tupai: ["Eastern gray squirrel", "Squirrel"],
-  landak: ["Hedgehog"],
-  kucing: ["Cat"],
-  anjing: ["Dog"],
-  lumba_lumba: ["Common bottlenose dolphin", "Dolphin"],
+const videoQueryMap: Record<string, string> = {
+  singa: "lion", gajah: "elephant", jerapah: "giraffe", zebra: "zebra",
+  harimau: "tiger", panda: "panda", koala: "koala", kanguru: "kangaroo",
+  buaya: "crocodile", gorila: "gorilla", rusa: "deer", kuda_nil: "hippo",
+  badak: "rhino", unta: "camel", rubah: "fox", serigala: "wolf",
+  beruang: "bear", elang: "eagle", burung_unta: "ostrich", penguin: "penguin",
+  flamingo: "flamingo", merak: "peacock", ular_kobra: "cobra snake",
+  kura_kura: "turtle", kelinci: "rabbit", tupai: "squirrel", landak: "hedgehog",
+  kucing: "cat", anjing: "dog", lumba_lumba: "dolphin",
 };
 
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
@@ -70,26 +48,16 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-async function fetchWikiImage(titles: string[]): Promise<string | null> {
-  for (const title of titles) {
-    try {
-      const res = await fetch(
-        `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(
-          title
-        )}&prop=pageimages&format=json&pithumbsize=600&redirects=1&origin=*`
-      );
-      const data = await res.json();
-      const pages = data?.query?.pages;
-      if (pages) {
-        const page: any = Object.values(pages)[0];
-        const url = page?.thumbnail?.source;
-        if (url) return url;
-      }
-    } catch {
-      continue;
-    }
+async function fetchAnimalVideo(query: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/animal-video?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    console.log("VIDEO FETCH RESULT for", query, "=>", data);
+    return data?.url ?? null;
+  } catch (err) {
+    console.log("VIDEO FETCH ERROR", err);
+    return null;
   }
-  return null;
 }
 
 export default function Home() {
@@ -107,9 +75,10 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
   const [timedOut, setTimedOut] = useState(false);
 
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [photoFailed, setPhotoFailed] = useState(false);
-  const [audioFailed, setAudioFailed] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
 
   const [roundNumber, setRoundNumber] = useState(1);
   const [correctCount, setCorrectCount] = useState(0);
@@ -118,7 +87,7 @@ export default function Home() {
   const lastAnimalId = useRef<string | null>(null);
   const roundNumberRef = useRef(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const rewardAudioRef = useRef<HTMLAudioElement | null>(null);
+  const rewardVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     roundNumberRef.current = roundNumber;
@@ -169,15 +138,15 @@ export default function Home() {
     setWrongId(null);
     setTimeLeft(ROUND_TIME);
     setTimedOut(false);
-    setPhotoUrl(null);
-    setPhotoFailed(false);
-    setAudioFailed(false);
+    setVideoUrl(null);
+    setVideoFailed(false);
+    setIsMuted(true);
 
     setTimeout(() => speak(desc), 300);
   }, [answerCount, speak]);
 
   const goToNextOrFinish = useCallback(() => {
-    rewardAudioRef.current?.pause();
+    rewardVideoRef.current?.pause();
     if (roundNumberRef.current >= TOTAL_ROUNDS) {
       setScreen("finished");
     } else {
@@ -220,12 +189,14 @@ export default function Home() {
     if (screen !== "result" || !currentAnimal) return;
 
     let cancelled = false;
-    const titles = wikiTitleMap[currentAnimal.id] ?? [currentAnimal.name];
+    const query = videoQueryMap[currentAnimal.id] ?? currentAnimal.name;
+    setVideoLoading(true);
 
-    fetchWikiImage(titles).then((url) => {
+    fetchAnimalVideo(query).then((url) => {
       if (cancelled) return;
-      if (url) setPhotoUrl(url);
-      else setPhotoFailed(true);
+      setVideoLoading(false);
+      if (url) setVideoUrl(url);
+      else setVideoFailed(true);
     });
 
     return () => {
@@ -378,14 +349,28 @@ export default function Home() {
           </h2>
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
-            {photoUrl && !photoFailed ? (
-              <img
-                key={currentAnimal.id + "-photo"}
-                src={photoUrl}
-                alt={currentAnimal.name}
-                onError={() => setPhotoFailed(true)}
-                className="w-full h-full object-cover"
-              />
+            {videoUrl && !videoFailed ? (
+              <div className="relative w-full h-full">
+                <video
+                  key={currentAnimal.id}
+                  ref={rewardVideoRef}
+                  src={videoUrl}
+                  autoPlay
+                  loop
+                  muted={isMuted}
+                  playsInline
+                  onError={() => setVideoFailed(true)}
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={() => setIsMuted((m) => !m)}
+                  className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center text-lg"
+                >
+                  {isMuted ? "🔇" : "🔊"}
+                </button>
+              </div>
+            ) : videoLoading ? (
+              <div className="text-6xl animate-pulse">⏳</div>
             ) : (
               <div className="text-9xl animate-bounce">
                 {emojiMap[currentAnimal.id] ?? "🐾"}
@@ -393,21 +378,11 @@ export default function Home() {
             )}
           </div>
 
-          {!audioFailed && (
-            <audio
-              key={currentAnimal.id + "-audio"}
-              ref={rewardAudioRef}
-              src={`/sounds/${currentAnimal.id}.mp3`}
-              autoPlay
-              onError={() => setAudioFailed(true)}
-            />
-          )}
-
           <p className="text-2xl font-bold text-white drop-shadow">Itu adalah {currentAnimal.name}!</p>
           <div className="flex gap-4 mt-4">
             <button
               onClick={() => {
-                rewardAudioRef.current?.pause();
+                rewardVideoRef.current?.pause();
                 setScreen("menu");
               }}
               className="px-8 py-4 rounded-full bg-white text-slate-700 font-bold text-xl shadow-lg hover:scale-105 transition">
