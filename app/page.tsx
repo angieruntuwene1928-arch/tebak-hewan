@@ -337,12 +337,12 @@ export default function Home() {
       {screen === "game" && currentAnimal && (
         <div className="relative z-10 min-h-screen flex flex-col items-center px-4 py-8 gap-8">
           <div className="mt-4 flex items-center gap-3">
-            <div className="px-5 py-2 bg-white/90 rounded-full text-lg font-bold shadow">
+            <div className="px-5 py-2 bg-white/90 rounded-full text-lg font-bold shadow text-slate-800">
               🐾 Soal {roundNumber}/{TOTAL_ROUNDS}
             </div>
             <div
               className={`px-6 py-2 rounded-full text-2xl font-bold shadow ${
-                timeLeft <= 10 ? "bg-red-400 text-white animate-pulse" : "bg-white/90"
+                timeLeft <= 10 ? "bg-red-400 text-white animate-pulse" : "bg-white/90 text-slate-800"
               }`}
             >
               ⏱️ {timeLeft}s
