@@ -27,17 +27,20 @@ const emojiMap: Record<string, string> = {
 
 const videoQueryMap: Record<string, string> = {
   singa: "lion", gajah: "elephant", jerapah: "giraffe", zebra: "zebra",
-  harimau: "tiger", panda: "panda", koala: "koala bear", kanguru: "kangaroo",
+  harimau: "tiger", panda: "panda", kanguru: "kangaroo",
   buaya: "crocodile", gorila: "gorilla", rusa: "deer", kuda_nil: "hippo",
   badak: "rhino", unta: "camel", rubah: "fox", serigala: "wolf",
   beruang: "bear", elang: "eagle", burung_unta: "ostrich", penguin: "penguin",
-  flamingo: "flamingo", merak: "peacock", ular_kobra: "king cobra",
+  flamingo: "flamingo", merak: "peacock",
   kura_kura: "turtle", kelinci: "rabbit", tupai: "squirrel", landak: "hedgehog",
   kucing: "cat", anjing: "dog", lumba_lumba: "dolphin",
 };
 
-// hewan yang pakai foto asli (bukan emoji) di pilihan jawaban
-const REAL_PHOTO_IDS = ["koala", "ular_kobra"];
+// hewan yang fotonya dikunci manual by ID (dijamin foto asli, bukan hasil pencarian)
+const MANUAL_IMAGE_IDS: Record<string, number> = {
+  koala: 9960,
+  ular_kobra: 405623,
+};
 
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
 type Choice = { id: string; name: string; emoji: string };
@@ -61,9 +64,9 @@ async function fetchAnimalVideo(query: string): Promise<string | null> {
   }
 }
 
-async function fetchAnimalImage(query: string): Promise<string | null> {
+async function fetchAnimalImageById(id: number): Promise<string | null> {
   try {
-    const res = await fetch(`/api/animal-image?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/animal-image?id=${id}`);
     const data = await res.json();
     return data?.url ?? null;
   } catch {
@@ -112,6 +115,18 @@ export default function Home() {
       bgmRef.current.muted = !bgmEnabled;
     }
   }, [bgmEnabled]);
+
+  // preload foto asli yang dikunci manual, sekali aja
+  useEffect(() => {
+    Object.entries(MANUAL_IMAGE_IDS).forEach(([id, pixabayId]) => {
+      if (!photoUrls[id]) {
+        fetchAnimalImageById(pixabayId).then((url) => {
+          if (url) setPhotoUrls((prev) => ({ ...prev, [id]: url }));
+        });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const speak = useCallback(
     (text: string) => {
@@ -164,19 +179,6 @@ export default function Home() {
     setTimeout(() => speak(desc), 300);
   }, [answerCount, speak]);
 
-  useEffect(() => {
-    choices.forEach((c) => {
-      if (REAL_PHOTO_IDS.includes(c.id) && !photoUrls[c.id]) {
-        const query = videoQueryMap[c.id] ?? c.name;
-        fetchAnimalImage(query).then((url) => {
-          if (url) {
-            setPhotoUrls((prev) => ({ ...prev, [c.id]: url }));
-          }
-        });
-      }
-    });
-  }, [choices, photoUrls]);
-
   const goToNextOrFinish = useCallback(() => {
     rewardVideoRef.current?.pause();
     if (roundNumberRef.current >= TOTAL_ROUNDS) {
@@ -217,8 +219,10 @@ export default function Home() {
     };
   }, [screen, selectedId, timedOut, handleTimeout]);
 
+  // ambil video reward, KECUALI untuk hewan yang fotonya udah dikunci manual
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
+    if (MANUAL_IMAGE_IDS[currentAnimal.id]) return;
 
     let cancelled = false;
     const query = videoQueryMap[currentAnimal.id] ?? currentAnimal.name;
@@ -364,7 +368,7 @@ export default function Home() {
               const isCorrectChoice = currentAnimal.id === c.id;
               const showCorrectHighlight = !!selectedId && isCorrectChoice;
               const showWrongHighlight = wrongId === c.id;
-              const hasRealPhoto = REAL_PHOTO_IDS.includes(c.id) && photoUrls[c.id];
+              const hasRealPhoto = MANUAL_IMAGE_IDS[c.id] && photoUrls[c.id];
               return (
                 <button key={c.id} onClick={() => handleChoice(c.id)}
                   disabled={!!selectedId || timedOut}
@@ -408,7 +412,17 @@ export default function Home() {
           </h2>
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
-            {videoUrl && !videoFailed ? (
+            {MANUAL_IMAGE_IDS[currentAnimal.id] ? (
+              photoUrls[currentAnimal.id] ? (
+                <img
+                  src={photoUrls[currentAnimal.id]}
+                  alt={currentAnimal.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="text-6xl animate-pulse">⏳</div>
+              )
+            ) : videoUrl && !videoFailed ? (
               <video
                 key={currentAnimal.id}
                 ref={rewardVideoRef}
