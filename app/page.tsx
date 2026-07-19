@@ -15,6 +15,8 @@ const TOTAL_ROUNDS = 10;
 const ROUND_TIME = 30;
 const WRONG_FEEDBACK_DELAY = 1800;
 const COLLECTION_STORAGE_KEY = "tebak-hewan-collection";
+const BEST_SCORE_STORAGE_KEY = "tebak-hewan-best-score";
+const BEST_STREAK_STORAGE_KEY = "tebak-hewan-best-streak";
 
 const emojiMap: Record<string, string> = {
   singa: "🦁", gajah: "🐘", jerapah: "🦒", zebra: "🦓", harimau: "🐯",
@@ -100,6 +102,11 @@ export default function Home() {
   const [collectedIds, setCollectedIds] = useState<string[]>([]);
   const [newlyCollected, setNewlyCollected] = useState(false);
 
+  const [streak, setStreak] = useState(0);
+  const [bestStreakEver, setBestStreakEver] = useState(0);
+  const [bestScoreEver, setBestScoreEver] = useState(0);
+  const [newHighScore, setNewHighScore] = useState(false);
+
   const lastAnimalId = useRef<string | null>(null);
   const roundNumberRef = useRef(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -118,8 +125,14 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(COLLECTION_STORAGE_KEY);
-      if (saved) setCollectedIds(JSON.parse(saved));
+      const savedCollection = localStorage.getItem(COLLECTION_STORAGE_KEY);
+      if (savedCollection) setCollectedIds(JSON.parse(savedCollection));
+
+      const savedScore = localStorage.getItem(BEST_SCORE_STORAGE_KEY);
+      if (savedScore) setBestScoreEver(parseInt(savedScore, 10) || 0);
+
+      const savedStreak = localStorage.getItem(BEST_STREAK_STORAGE_KEY);
+      if (savedStreak) setBestStreakEver(parseInt(savedStreak, 10) || 0);
     } catch {}
   }, []);
 
@@ -202,6 +215,7 @@ export default function Home() {
   const handleTimeout = useCallback(() => {
     setTimedOut(true);
     setWrongCount((w) => w + 1);
+    setStreak(0);
     window.speechSynthesis.cancel();
     setTimeout(() => {
       goToNextOrFinish();
@@ -249,6 +263,17 @@ export default function Home() {
 
   useEffect(() => {
     if (screen !== "finished") return;
+
+    if (correctCount > bestScoreEver) {
+      setBestScoreEver(correctCount);
+      setNewHighScore(true);
+      try {
+        localStorage.setItem(BEST_SCORE_STORAGE_KEY, String(correctCount));
+      } catch {}
+    } else {
+      setNewHighScore(false);
+    }
+
     const end = Date.now() + 3000;
     let frameId: number;
     const frame = () => {
@@ -260,12 +285,14 @@ export default function Home() {
     };
     frame();
     return () => cancelAnimationFrame(frameId);
-  }, [screen]);
+  }, [screen, correctCount, bestScoreEver]);
 
   const startGame = () => {
     setRoundNumber(1);
     setCorrectCount(0);
     setWrongCount(0);
+    setStreak(0);
+    setNewHighScore(false);
     lastAnimalId.current = null;
     setScreen("game");
     generateRound();
@@ -286,6 +313,17 @@ export default function Home() {
       window.speechSynthesis.cancel();
       fireConfetti();
 
+      setStreak((s) => {
+        const newStreak = s + 1;
+        if (newStreak > bestStreakEver) {
+          setBestStreakEver(newStreak);
+          try {
+            localStorage.setItem(BEST_STREAK_STORAGE_KEY, String(newStreak));
+          } catch {}
+        }
+        return newStreak;
+      });
+
       if (!collectedIds.includes(currentAnimal.id)) {
         const updated = [...collectedIds, currentAnimal.id];
         setCollectedIds(updated);
@@ -299,6 +337,7 @@ export default function Home() {
     } else {
       setWrongId(choiceId);
       setWrongCount((w) => w + 1);
+      setStreak(0);
       window.speechSynthesis.cancel();
       setTimeout(() => {
         goToNextOrFinish();
@@ -348,6 +387,18 @@ export default function Home() {
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
             🦁 Tebak Hewan 🐘
           </h1>
+
+          {(bestScoreEver > 0 || bestStreakEver > 0) && (
+            <div className="flex gap-3">
+              <div className="px-5 py-2 bg-white/90 rounded-full text-sm md:text-base font-bold shadow text-slate-700">
+                🏆 Skor Terbaik: {bestScoreEver}/{TOTAL_ROUNDS}
+              </div>
+              <div className="px-5 py-2 bg-white/90 rounded-full text-sm md:text-base font-bold shadow text-slate-700">
+                🔥 Streak Terbaik: {bestStreakEver}
+              </div>
+            </div>
+          )}
+
           <button onClick={startGame}
             className="px-12 py-5 rounded-full bg-orange-400 hover:bg-orange-500 active:scale-95 transition text-white text-3xl font-bold shadow-xl">
             ▶️ Main
@@ -409,7 +460,7 @@ export default function Home() {
 
       {screen === "game" && currentAnimal && (
         <div className="relative z-10 min-h-screen flex flex-col items-center px-4 py-8 gap-8">
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex items-center gap-3 flex-wrap justify-center">
             <div className="px-5 py-2 bg-white/90 rounded-full text-lg font-bold shadow text-slate-800">
               🐾 Soal {roundNumber}/{TOTAL_ROUNDS}
             </div>
@@ -420,6 +471,11 @@ export default function Home() {
             >
               ⏱️ {timeLeft}s
             </div>
+            {streak >= 2 && (
+              <div className="px-5 py-2 bg-yellow-300 rounded-full text-lg font-bold shadow text-slate-800 animate-pulse">
+                🔥 {streak} Streak!
+              </div>
+            )}
           </div>
 
           <div className="max-w-2xl w-full bg-white/95 rounded-3xl shadow-xl p-6 md:p-8 flex flex-col items-center gap-4">
@@ -480,11 +536,18 @@ export default function Home() {
             🎉 Hebat! Jawabanmu Benar! 🎉
           </h2>
 
-          {newlyCollected && (
-            <div className="px-5 py-2 rounded-full bg-yellow-300 text-slate-800 font-bold shadow-lg animate-bounce">
-              ✨ Hewan Baru Terkoleksi! ✨
-            </div>
-          )}
+          <div className="flex gap-3 flex-wrap justify-center">
+            {newlyCollected && (
+              <div className="px-5 py-2 rounded-full bg-yellow-300 text-slate-800 font-bold shadow-lg animate-bounce">
+                ✨ Hewan Baru Terkoleksi! ✨
+              </div>
+            )}
+            {streak >= 2 && (
+              <div className="px-5 py-2 rounded-full bg-orange-400 text-white font-bold shadow-lg">
+                🔥 {streak} Streak!
+              </div>
+            )}
+          </div>
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
             {videoUrl && !videoFailed ? (
@@ -531,6 +594,12 @@ export default function Home() {
             🎊 Permainan Selesai! 🎊
           </h2>
 
+          {newHighScore && (
+            <div className="px-6 py-3 rounded-full bg-yellow-300 text-slate-800 font-bold shadow-lg animate-bounce text-lg">
+              🏆 Rekor Baru! 🏆
+            </div>
+          )}
+
           <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center gap-4">
             <div className="text-7xl">
               {correctCount / TOTAL_ROUNDS === 1 ? "🏆" : "🐾"}
@@ -545,6 +614,17 @@ export default function Home() {
               <div className="flex-1 bg-red-100 rounded-2xl py-4 text-center">
                 <p className="text-3xl font-extrabold text-red-500">{wrongCount}</p>
                 <p className="text-sm font-semibold text-red-600">❌ Salah</p>
+              </div>
+            </div>
+
+            <div className="w-full flex gap-3">
+              <div className="flex-1 bg-orange-100 rounded-2xl py-3 text-center">
+                <p className="text-lg font-extrabold text-orange-600">🏆 {bestScoreEver}/{TOTAL_ROUNDS}</p>
+                <p className="text-xs font-semibold text-orange-700">Skor Terbaik</p>
+              </div>
+              <div className="flex-1 bg-yellow-100 rounded-2xl py-3 text-center">
+                <p className="text-lg font-extrabold text-yellow-600">🔥 {bestStreakEver}</p>
+                <p className="text-xs font-semibold text-yellow-700">Streak Terbaik</p>
               </div>
             </div>
           </div>
