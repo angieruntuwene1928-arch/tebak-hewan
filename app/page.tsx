@@ -27,7 +27,7 @@ const emojiMap: Record<string, string> = {
 
 const videoQueryMap: Record<string, string> = {
   singa: "lion", gajah: "elephant", jerapah: "giraffe", zebra: "zebra",
-  harimau: "tiger", panda: "panda", koala: "koala bear", kanguru: "kangaroo",
+  harimau: "tiger", panda: "panda", koala: "koala eucalyptus wildlife", kanguru: "kangaroo",
   buaya: "crocodile", gorila: "gorilla", rusa: "deer", kuda_nil: "hippo",
   badak: "rhino", unta: "camel", rubah: "fox", serigala: "wolf",
   beruang: "bear", elang: "eagle", burung_unta: "ostrich", penguin: "penguin",
@@ -36,7 +36,6 @@ const videoQueryMap: Record<string, string> = {
   kucing: "cat", anjing: "dog", lumba_lumba: "dolphin",
 };
 
-// hewan yang pakai foto asli (bukan emoji) di pilihan jawaban
 const REAL_PHOTO_IDS = ["koala", "ular_kobra"];
 
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
