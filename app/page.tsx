@@ -17,6 +17,7 @@ const WRONG_FEEDBACK_DELAY = 1800;
 const COLLECTION_STORAGE_KEY = "tebak-hewan-collection";
 const BEST_SCORE_STORAGE_KEY = "tebak-hewan-best-score";
 const BEST_STREAK_STORAGE_KEY = "tebak-hewan-best-streak";
+const PLAYER_NAME_KEY = "tebak-hewan-player-name";
 
 const emojiMap: Record<string, string> = {
   singa: "🦁", gajah: "🐘", jerapah: "🦒", zebra: "🦓", harimau: "🐯",
@@ -41,8 +42,27 @@ const videoQueryMap: Record<string, string> = {
 
 const REAL_PHOTO_IDS = ["koala", "ular_kobra"];
 
+const categoryMap: Record<string, string> = {
+  singa: "savana", gajah: "savana", jerapah: "savana", zebra: "savana", badak: "savana", unta: "savana",
+  harimau: "hutan", panda: "hutan", koala: "hutan", gorila: "hutan", rusa: "hutan", rubah: "hutan",
+  serigala: "hutan", beruang: "hutan", landak: "hutan", tupai: "hutan", ular_kobra: "hutan",
+  buaya: "air", kuda_nil: "air", kura_kura: "air", lumba_lumba: "air", flamingo: "air",
+  elang: "burung", burung_unta: "burung", penguin: "burung", merak: "burung",
+  kucing: "lainnya", anjing: "lainnya", kelinci: "lainnya", kanguru: "lainnya",
+};
+
+const categoryLabels: Record<string, string> = {
+  semua: "🌍 Semua Hewan",
+  savana: "🦁 Savana Afrika",
+  hutan: "🌳 Hutan",
+  air: "🌊 Air & Rawa",
+  burung: "🦅 Burung",
+  lainnya: "🐾 Lainnya",
+};
+
 type Screen = "menu" | "game" | "result" | "finished" | "settings" | "collection";
 type Choice = { id: string; name: string; emoji: string };
+type GameMode = "normal" | "endless";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -71,6 +91,34 @@ async function fetchAnimalImage(query: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+function playTone(freq: number, duration: number, type: OscillatorType = "sine") {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch {}
+}
+
+function playCorrectSound() {
+  playTone(523.25, 0.15);
+  setTimeout(() => playTone(659.25, 0.15), 100);
+  setTimeout(() => playTone(783.99, 0.2), 200);
+}
+
+function playWrongSound() {
+  playTone(200, 0.3, "sawtooth");
 }
 
 export default function Home() {
@@ -107,8 +155,18 @@ export default function Home() {
   const [bestScoreEver, setBestScoreEver] = useState(0);
   const [newHighScore, setNewHighScore] = useState(false);
 
+  const [gameMode, setGameMode] = useState<GameMode>("normal");
+  const [selectedCategory, setSelectedCategory] = useState("semua");
+
+  const [hintUsed, setHintUsed] = useState(false);
+  const [eliminatedChoiceId, setEliminatedChoiceId] = useState<string | null>(null);
+
+  const [playerName, setPlayerName] = useState("");
+  const [nameInput, setNameInput] = useState("");
+
   const lastAnimalId = useRef<string | null>(null);
   const roundNumberRef = useRef(1);
+  const gameModeRef = useRef<GameMode>("normal");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rewardVideoRef = useRef<HTMLVideoElement | null>(null);
   const bgmRef = useRef<HTMLAudioElement | null>(null);
@@ -116,6 +174,10 @@ export default function Home() {
   useEffect(() => {
     roundNumberRef.current = roundNumber;
   }, [roundNumber]);
+
+  useEffect(() => {
+    gameModeRef.current = gameMode;
+  }, [gameMode]);
 
   useEffect(() => {
     if (bgmRef.current) {
@@ -133,8 +195,20 @@ export default function Home() {
 
       const savedStreak = localStorage.getItem(BEST_STREAK_STORAGE_KEY);
       if (savedStreak) setBestStreakEver(parseInt(savedStreak, 10) || 0);
+
+      const savedName = localStorage.getItem(PLAYER_NAME_KEY);
+      if (savedName) setPlayerName(savedName);
     } catch {}
   }, []);
+
+  const savePlayerName = () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) return;
+    setPlayerName(trimmed);
+    try {
+      localStorage.setItem(PLAYER_NAME_KEY, trimmed);
+    } catch {}
+  };
 
   const speak = useCallback(
     (text: string) => {
@@ -149,21 +223,27 @@ export default function Home() {
     [volume]
   );
 
+  const getAnimalPool = useCallback(() => {
+    if (selectedCategory === "semua") return animals;
+    return animals.filter((a) => categoryMap[a.id] === selectedCategory);
+  }, [selectedCategory]);
+
   const generateRound = useCallback(() => {
-    let pool = animals;
-    if (animals.length > 1 && lastAnimalId.current) {
-      pool = animals.filter((a) => a.id !== lastAnimalId.current);
+    const basePool = getAnimalPool();
+    let pool = basePool;
+    if (basePool.length > 1 && lastAnimalId.current) {
+      pool = basePool.filter((a) => a.id !== lastAnimalId.current);
     }
+    if (pool.length === 0) pool = basePool;
+
     const animal = pool[Math.floor(Math.random() * pool.length)];
     lastAnimalId.current = animal.id;
 
     const desc =
       animal.descriptions[Math.floor(Math.random() * animal.descriptions.length)];
 
-    const others = shuffle(animals.filter((a) => a.id !== animal.id)).slice(
-      0,
-      answerCount - 1
-    );
+    const otherPool = basePool.filter((a) => a.id !== animal.id);
+    const others = shuffle(otherPool).slice(0, Math.min(answerCount - 1, otherPool.length));
 
     const roundChoices: Choice[] = shuffle([
       { id: animal.id, name: animal.name, emoji: emojiMap[animal.id] ?? "🐾" },
@@ -184,9 +264,11 @@ export default function Home() {
     setVideoUrl(null);
     setVideoFailed(false);
     setNewlyCollected(false);
+    setHintUsed(false);
+    setEliminatedChoiceId(null);
 
     setTimeout(() => speak(desc), 300);
-  }, [answerCount, speak]);
+  }, [answerCount, speak, getAnimalPool]);
 
   useEffect(() => {
     choices.forEach((c) => {
@@ -203,7 +285,7 @@ export default function Home() {
 
   const goToNextOrFinish = useCallback(() => {
     rewardVideoRef.current?.pause();
-    if (roundNumberRef.current >= TOTAL_ROUNDS) {
+    if (gameModeRef.current === "normal" && roundNumberRef.current >= TOTAL_ROUNDS) {
       setScreen("finished");
     } else {
       setRoundNumber((r) => r + 1);
@@ -212,15 +294,28 @@ export default function Home() {
     }
   }, [generateRound]);
 
-  const handleTimeout = useCallback(() => {
-    setTimedOut(true);
+  const endRoundAsWrong = useCallback(() => {
     setWrongCount((w) => w + 1);
     setStreak(0);
     window.speechSynthesis.cancel();
-    setTimeout(() => {
-      goToNextOrFinish();
-    }, WRONG_FEEDBACK_DELAY);
+
+    if (gameModeRef.current === "endless") {
+      setTimeout(() => {
+        rewardVideoRef.current?.pause();
+        setScreen("finished");
+      }, WRONG_FEEDBACK_DELAY);
+    } else {
+      setTimeout(() => {
+        goToNextOrFinish();
+      }, WRONG_FEEDBACK_DELAY);
+    }
   }, [goToNextOrFinish]);
+
+  const handleTimeout = useCallback(() => {
+    setTimedOut(true);
+    playWrongSound();
+    endRoundAsWrong();
+  }, [endRoundAsWrong]);
 
   useEffect(() => {
     if (screen !== "game" || selectedId || timedOut) {
@@ -264,7 +359,7 @@ export default function Home() {
   useEffect(() => {
     if (screen !== "finished") return;
 
-    if (correctCount > bestScoreEver) {
+    if (gameMode === "normal" && correctCount > bestScoreEver) {
       setBestScoreEver(correctCount);
       setNewHighScore(true);
       try {
@@ -285,7 +380,7 @@ export default function Home() {
     };
     frame();
     return () => cancelAnimationFrame(frameId);
-  }, [screen, correctCount, bestScoreEver]);
+  }, [screen, correctCount, bestScoreEver, gameMode]);
 
   const startGame = () => {
     setRoundNumber(1);
@@ -293,6 +388,8 @@ export default function Home() {
     setWrongCount(0);
     setStreak(0);
     setNewHighScore(false);
+    setHintUsed(false);
+    setEliminatedChoiceId(null);
     lastAnimalId.current = null;
     setScreen("game");
     generateRound();
@@ -304,6 +401,15 @@ export default function Home() {
     confetti({ particleCount: 80, angle: 120, spread: 70, origin: { x: 1, y: 0 } });
   };
 
+  const useHint = () => {
+    if (hintUsed || selectedId || !currentAnimal) return;
+    const wrongChoices = choices.filter((c) => c.id !== currentAnimal.id);
+    if (wrongChoices.length === 0) return;
+    const toEliminate = wrongChoices[Math.floor(Math.random() * wrongChoices.length)];
+    setEliminatedChoiceId(toEliminate.id);
+    setHintUsed(true);
+  };
+
   const handleChoice = (choiceId: string) => {
     if (selectedId || timedOut) return;
     setSelectedId(choiceId);
@@ -312,6 +418,7 @@ export default function Home() {
       setCorrectCount((c) => c + 1);
       window.speechSynthesis.cancel();
       fireConfetti();
+      playCorrectSound();
 
       setStreak((s) => {
         const newStreak = s + 1;
@@ -336,22 +443,25 @@ export default function Home() {
       setTimeout(() => setScreen("result"), 600);
     } else {
       setWrongId(choiceId);
-      setWrongCount((w) => w + 1);
-      setStreak(0);
-      window.speechSynthesis.cancel();
-      setTimeout(() => {
-        goToNextOrFinish();
-      }, WRONG_FEEDBACK_DELAY);
+      playWrongSound();
+      endRoundAsWrong();
     }
   };
 
   const openSettings = () => {
     setPrevScreen(screen);
+    setNameInput(playerName);
     setScreen("settings");
   };
   const closeSettings = () => setScreen(prevScreen);
 
   const scoreMessage = () => {
+    if (gameMode === "endless") {
+      if (correctCount >= 15) return "Luar Biasa! Kamu Legenda Hewan! 🏆";
+      if (correctCount >= 8) return "Keren banget! Hebat sekali! 🌟";
+      if (correctCount >= 4) return "Bagus! Ayo terus berlatih! 💪";
+      return "Yuk coba lagi, kamu pasti bisa! 🐣";
+    }
     const ratio = correctCount / TOTAL_ROUNDS;
     if (ratio === 1) return "Sempurna! Kamu Jagoan Hewan! 🏆";
     if (ratio >= 0.7) return "Keren banget! Hebat sekali! 🌟";
@@ -361,6 +471,22 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-200 to-lime-200">
+      <style jsx global>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadein {
+          animation: fadeInUp 0.4s ease-out;
+        }
+      `}</style>
+
       <audio ref={bgmRef} src="/music/bgm.mp3" loop muted={!bgmEnabled} preload="auto" />
 
       <div className="pointer-events-none select-none absolute inset-0 text-6xl opacity-30 flex flex-wrap content-start gap-8 p-6">
@@ -383,13 +509,17 @@ export default function Home() {
       )}
 
       {screen === "menu" && (
-        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center gap-6 px-4">
+        <div className="animate-fadein relative z-10 min-h-screen flex flex-col items-center justify-center gap-5 px-4 py-10">
+          {playerName && (
+            <p className="text-white font-bold text-lg drop-shadow">Halo, {playerName}! 👋</p>
+          )}
+
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
             🦁 Tebak Hewan 🐘
           </h1>
 
           {(bestScoreEver > 0 || bestStreakEver > 0) && (
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap justify-center">
               <div className="px-5 py-2 bg-white/90 rounded-full text-sm md:text-base font-bold shadow text-slate-700">
                 🏆 Skor Terbaik: {bestScoreEver}/{TOTAL_ROUNDS}
               </div>
@@ -398,6 +528,49 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          <div className="bg-white/90 rounded-3xl shadow-xl p-4 flex flex-col gap-3 max-w-md w-full">
+            <p className="text-center font-bold text-slate-600 text-sm">Pilih Kategori</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {Object.entries(categoryLabels).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setSelectedCategory(key)}
+                  className={`px-4 py-2 rounded-full text-sm font-bold transition ${
+                    selectedCategory === key
+                      ? "bg-orange-400 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-center font-bold text-slate-600 text-sm mt-2">Pilih Mode</p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setGameMode("normal")}
+                className={`flex-1 px-4 py-2 rounded-full text-sm font-bold transition ${
+                  gameMode === "normal"
+                    ? "bg-sky-400 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                🎯 Normal (10 Soal)
+              </button>
+              <button
+                onClick={() => setGameMode("endless")}
+                className={`flex-1 px-4 py-2 rounded-full text-sm font-bold transition ${
+                  gameMode === "endless"
+                    ? "bg-purple-400 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                ♾️ Endless
+              </button>
+            </div>
+          </div>
 
           <button onClick={startGame}
             className="px-12 py-5 rounded-full bg-orange-400 hover:bg-orange-500 active:scale-95 transition text-white text-3xl font-bold shadow-xl">
@@ -416,7 +589,7 @@ export default function Home() {
       )}
 
       {screen === "collection" && (
-        <div className="relative z-10 min-h-screen flex flex-col items-center px-4 py-8 gap-6">
+        <div className="animate-fadein relative z-10 min-h-screen flex flex-col items-center px-4 py-8 gap-6">
           <h2 className="text-3xl md:text-4xl font-extrabold text-white drop-shadow text-center mt-4">
             📖 Koleksi Hewan
           </h2>
@@ -459,10 +632,12 @@ export default function Home() {
       )}
 
       {screen === "game" && currentAnimal && (
-        <div className="relative z-10 min-h-screen flex flex-col items-center px-4 py-8 gap-8">
+        <div className="animate-fadein relative z-10 min-h-screen flex flex-col items-center px-4 py-8 gap-6">
           <div className="mt-4 flex items-center gap-3 flex-wrap justify-center">
             <div className="px-5 py-2 bg-white/90 rounded-full text-lg font-bold shadow text-slate-800">
-              🐾 Soal {roundNumber}/{TOTAL_ROUNDS}
+              {gameMode === "endless"
+                ? `🐾 Soal ke-${roundNumber}`
+                : `🐾 Soal ${roundNumber}/${TOTAL_ROUNDS}`}
             </div>
             <div
               className={`px-6 py-2 rounded-full text-2xl font-bold shadow ${
@@ -478,22 +653,53 @@ export default function Home() {
             )}
           </div>
 
+          <div className="w-full max-w-md h-3 bg-white/40 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-green-400 to-red-400 transition-all duration-1000 ease-linear"
+              style={{ width: `${(timeLeft / ROUND_TIME) * 100}%` }}
+            />
+          </div>
+
           <div className="max-w-2xl w-full bg-white/95 rounded-3xl shadow-xl p-6 md:p-8 flex flex-col items-center gap-4">
             <p className="text-xl md:text-2xl text-center font-semibold text-slate-700">
               {question}
             </p>
-            <button onClick={() => speak(question)}
-              className="px-5 py-2 rounded-full bg-sky-400 hover:bg-sky-500 text-white font-bold shadow">
-              🔊 Baca Ulang
-            </button>
+            <div className="flex gap-3">
+              <button onClick={() => speak(question)}
+                className="px-5 py-2 rounded-full bg-sky-400 hover:bg-sky-500 text-white font-bold shadow">
+                🔊 Baca Ulang
+              </button>
+              <button
+                onClick={useHint}
+                disabled={hintUsed || !!selectedId}
+                className={`px-5 py-2 rounded-full font-bold shadow text-white transition ${
+                  hintUsed ? "bg-slate-300 cursor-not-allowed" : "bg-purple-400 hover:bg-purple-500"
+                }`}
+              >
+                💡 Petunjuk
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-4 md:gap-6 mt-4">
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6 mt-2">
             {choices.map((c) => {
               const isCorrectChoice = currentAnimal.id === c.id;
               const showCorrectHighlight = !!selectedId && isCorrectChoice;
               const showWrongHighlight = wrongId === c.id;
+              const isEliminated = eliminatedChoiceId === c.id;
               const hasRealPhoto = REAL_PHOTO_IDS.includes(c.id) && photoUrls[c.id];
+
+              if (isEliminated) {
+                return (
+                  <div
+                    key={c.id}
+                    className="w-28 h-28 md:w-36 md:h-36 rounded-3xl bg-slate-300/50 shadow-lg flex items-center justify-center text-4xl opacity-50"
+                  >
+                    ❌
+                  </div>
+                );
+              }
+
               return (
                 <button key={c.id} onClick={() => handleChoice(c.id)}
                   disabled={!!selectedId || timedOut}
@@ -531,7 +737,7 @@ export default function Home() {
       )}
 
       {screen === "result" && currentAnimal && (
-        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center gap-6 px-4">
+        <div className="animate-fadein relative z-10 min-h-screen flex flex-col items-center justify-center gap-6 px-4">
           <h2 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow text-center">
             🎉 Hebat! Jawabanmu Benar! 🎉
           </h2>
@@ -582,14 +788,19 @@ export default function Home() {
             </button>
             <button onClick={goToNextOrFinish}
               className="px-8 py-4 rounded-full bg-orange-400 hover:bg-orange-500 text-white font-bold text-xl shadow-lg hover:scale-105 transition">
-              ➡️ {roundNumber >= TOTAL_ROUNDS ? "Lihat Hasil" : "Soal Berikutnya"}
+              ➡️{" "}
+              {gameMode === "endless"
+                ? "Soal Berikutnya"
+                : roundNumber >= TOTAL_ROUNDS
+                ? "Lihat Hasil"
+                : "Soal Berikutnya"}
             </button>
           </div>
         </div>
       )}
 
       {screen === "finished" && (
-        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center gap-6 px-4">
+        <div className="animate-fadein relative z-10 min-h-screen flex flex-col items-center justify-center gap-6 px-4">
           <h2 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow text-center">
             🎊 Permainan Selesai! 🎊
           </h2>
@@ -602,9 +813,15 @@ export default function Home() {
 
           <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center gap-4">
             <div className="text-7xl">
-              {correctCount / TOTAL_ROUNDS === 1 ? "🏆" : "🐾"}
+              {gameMode === "normal" && correctCount / TOTAL_ROUNDS === 1 ? "🏆" : "🐾"}
             </div>
             <p className="text-xl font-bold text-slate-700 text-center">{scoreMessage()}</p>
+
+            {gameMode === "endless" && (
+              <p className="text-slate-500 font-semibold text-center">
+                Kamu bertahan sampai soal ke-{roundNumber}
+              </p>
+            )}
 
             <div className="w-full flex gap-3 mt-2">
               <div className="flex-1 bg-green-100 rounded-2xl py-4 text-center">
@@ -620,7 +837,7 @@ export default function Home() {
             <div className="w-full flex gap-3">
               <div className="flex-1 bg-orange-100 rounded-2xl py-3 text-center">
                 <p className="text-lg font-extrabold text-orange-600">🏆 {bestScoreEver}/{TOTAL_ROUNDS}</p>
-                <p className="text-xs font-semibold text-orange-700">Skor Terbaik</p>
+                <p className="text-xs font-semibold text-orange-700">Skor Terbaik Normal</p>
               </div>
               <div className="flex-1 bg-yellow-100 rounded-2xl py-3 text-center">
                 <p className="text-lg font-extrabold text-yellow-600">🔥 {bestStreakEver}</p>
@@ -643,9 +860,28 @@ export default function Home() {
       )}
 
       {screen === "settings" && (
-        <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
+        <div className="animate-fadein relative z-10 min-h-screen flex items-center justify-center px-4 py-8">
           <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md flex flex-col gap-6">
             <h2 className="text-3xl font-bold text-center text-slate-700">⚙️ Pengaturan</h2>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-semibold text-slate-600">🙋 Nama Kamu</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="Masukkan namamu"
+                  className="flex-1 px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-orange-400 outline-none text-slate-700"
+                />
+                <button
+                  onClick={savePlayerName}
+                  className="px-4 py-2 rounded-xl bg-orange-400 hover:bg-orange-500 text-white font-bold"
+                >
+                  Simpan
+                </button>
+              </div>
+            </div>
 
             <div className="flex flex-col gap-2">
               <label className="font-semibold text-slate-600">
