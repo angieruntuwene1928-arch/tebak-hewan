@@ -14,6 +14,7 @@ const animals = animalsData.animals as Animal[];
 const TOTAL_ROUNDS = 10;
 const ROUND_TIME = 30;
 const WRONG_FEEDBACK_DELAY = 1800;
+const COLLECTION_STORAGE_KEY = "tebak-hewan-collection";
 
 const emojiMap: Record<string, string> = {
   singa: "🦁", gajah: "🐘", jerapah: "🦒", zebra: "🦓", harimau: "🐯",
@@ -38,7 +39,7 @@ const videoQueryMap: Record<string, string> = {
 
 const REAL_PHOTO_IDS = ["koala", "ular_kobra"];
 
-type Screen = "menu" | "game" | "result" | "finished" | "settings";
+type Screen = "menu" | "game" | "result" | "finished" | "settings" | "collection";
 type Choice = { id: string; name: string; emoji: string };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -96,6 +97,9 @@ export default function Home() {
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongCount, setWrongCount] = useState(0);
 
+  const [collectedIds, setCollectedIds] = useState<string[]>([]);
+  const [newlyCollected, setNewlyCollected] = useState(false);
+
   const lastAnimalId = useRef<string | null>(null);
   const roundNumberRef = useRef(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -111,6 +115,13 @@ export default function Home() {
       bgmRef.current.muted = !bgmEnabled;
     }
   }, [bgmEnabled]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(COLLECTION_STORAGE_KEY);
+      if (saved) setCollectedIds(JSON.parse(saved));
+    } catch {}
+  }, []);
 
   const speak = useCallback(
     (text: string) => {
@@ -159,6 +170,7 @@ export default function Home() {
     setTimedOut(false);
     setVideoUrl(null);
     setVideoFailed(false);
+    setNewlyCollected(false);
 
     setTimeout(() => speak(desc), 300);
   }, [answerCount, speak]);
@@ -273,6 +285,16 @@ export default function Home() {
       setCorrectCount((c) => c + 1);
       window.speechSynthesis.cancel();
       fireConfetti();
+
+      if (!collectedIds.includes(currentAnimal.id)) {
+        const updated = [...collectedIds, currentAnimal.id];
+        setCollectedIds(updated);
+        setNewlyCollected(true);
+        try {
+          localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify(updated));
+        } catch {}
+      }
+
       setTimeout(() => setScreen("result"), 600);
     } else {
       setWrongId(choiceId);
@@ -322,13 +344,65 @@ export default function Home() {
       )}
 
       {screen === "menu" && (
-        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center gap-10 px-4">
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center gap-6 px-4">
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
             🦁 Tebak Hewan 🐘
           </h1>
           <button onClick={startGame}
             className="px-12 py-5 rounded-full bg-orange-400 hover:bg-orange-500 active:scale-95 transition text-white text-3xl font-bold shadow-xl">
             ▶️ Main
+          </button>
+          <button
+            onClick={() => setScreen("collection")}
+            className="px-8 py-3 rounded-full bg-white/90 hover:bg-white transition text-slate-700 text-lg font-bold shadow-lg flex items-center gap-2"
+          >
+            📖 Koleksi Hewan
+            <span className="px-2 py-0.5 rounded-full bg-orange-400 text-white text-sm">
+              {collectedIds.length}/{animals.length}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {screen === "collection" && (
+        <div className="relative z-10 min-h-screen flex flex-col items-center px-4 py-8 gap-6">
+          <h2 className="text-3xl md:text-4xl font-extrabold text-white drop-shadow text-center mt-4">
+            📖 Koleksi Hewan
+          </h2>
+          <p className="text-white/90 font-semibold drop-shadow">
+            Kamu sudah mengumpulkan {collectedIds.length} dari {animals.length} hewan!
+          </p>
+
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 max-w-3xl w-full">
+            {animals.map((a) => {
+              const isCollected = collectedIds.includes(a.id);
+              return (
+                <div
+                  key={a.id}
+                  className={`aspect-square rounded-2xl shadow-lg flex flex-col items-center justify-center gap-1 p-2 transition ${
+                    isCollected ? "bg-white" : "bg-white/40"
+                  }`}
+                >
+                  <span className={`text-4xl md:text-5xl ${isCollected ? "" : "grayscale opacity-40"}`}>
+                    {isCollected ? emojiMap[a.id] ?? "🐾" : "❓"}
+                  </span>
+                  <span
+                    className={`text-xs md:text-sm font-bold text-center ${
+                      isCollected ? "text-slate-700" : "text-slate-400"
+                    }`}
+                  >
+                    {isCollected ? a.name : "???"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => setScreen("menu")}
+            className="mt-4 px-8 py-4 rounded-full bg-white text-slate-700 font-bold text-xl shadow-lg hover:scale-105 transition"
+          >
+            🏠 Kembali ke Menu
           </button>
         </div>
       )}
@@ -405,6 +479,12 @@ export default function Home() {
           <h2 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow text-center">
             🎉 Hebat! Jawabanmu Benar! 🎉
           </h2>
+
+          {newlyCollected && (
+            <div className="px-5 py-2 rounded-full bg-yellow-300 text-slate-800 font-bold shadow-lg animate-bounce">
+              ✨ Hewan Baru Terkoleksi! ✨
+            </div>
+          )}
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
             {videoUrl && !videoFailed ? (
