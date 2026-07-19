@@ -27,20 +27,22 @@ const emojiMap: Record<string, string> = {
 
 const videoQueryMap: Record<string, string> = {
   singa: "lion", gajah: "elephant", jerapah: "giraffe", zebra: "zebra",
-  harimau: "tiger", panda: "panda", kanguru: "kangaroo",
+  harimau: "tiger", panda: "panda", koala: "koala bear", kanguru: "kangaroo",
   buaya: "crocodile", gorila: "gorilla", rusa: "deer", kuda_nil: "hippo",
   badak: "rhino", unta: "camel", rubah: "fox", serigala: "wolf",
   beruang: "bear", elang: "eagle", burung_unta: "ostrich", penguin: "penguin",
-  flamingo: "flamingo", merak: "peacock",
+  flamingo: "flamingo", merak: "peacock", ular_kobra: "king cobra",
   kura_kura: "turtle", kelinci: "rabbit", tupai: "squirrel", landak: "hedgehog",
   kucing: "cat", anjing: "dog", lumba_lumba: "dolphin",
 };
 
-// hewan yang fotonya dikunci manual by ID (dijamin foto asli, bukan hasil pencarian)
-const MANUAL_IMAGE_IDS: Record<string, number> = {
-  koala: 9960,
-  ular_kobra: 405623,
-};
+// hewan yang pakai foto asli (bukan emoji) di pilihan jawaban
+const REAL_PHOTO_IDS = ["koala", "ular_kobra"];
+
+// khusus koala dikunci ke 1 foto asli spesifik (ID Pixabay), karena hasil
+// pencarian otomatis sering salah nangkep gambar kartun. Kobra TIDAK disentuh,
+// tetap pakai pencarian biasa seperti sebelumnya karena sudah akurat.
+const KOALA_IMAGE_ID = 9960;
 
 type Screen = "menu" | "game" | "result" | "finished" | "settings";
 type Choice = { id: string; name: string; emoji: string };
@@ -57,6 +59,16 @@ function shuffle<T>(arr: T[]): T[] {
 async function fetchAnimalVideo(query: string): Promise<string | null> {
   try {
     const res = await fetch(`/api/animal-video?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    return data?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAnimalImage(query: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/animal-image?q=${encodeURIComponent(query)}`);
     const data = await res.json();
     return data?.url ?? null;
   } catch {
@@ -116,15 +128,13 @@ export default function Home() {
     }
   }, [bgmEnabled]);
 
-  // preload foto asli yang dikunci manual, sekali aja
+  // preload foto koala yang dikunci by ID, sekali aja saat app dibuka
   useEffect(() => {
-    Object.entries(MANUAL_IMAGE_IDS).forEach(([id, pixabayId]) => {
-      if (!photoUrls[id]) {
-        fetchAnimalImageById(pixabayId).then((url) => {
-          if (url) setPhotoUrls((prev) => ({ ...prev, [id]: url }));
-        });
-      }
-    });
+    if (!photoUrls["koala"]) {
+      fetchAnimalImageById(KOALA_IMAGE_ID).then((url) => {
+        if (url) setPhotoUrls((prev) => ({ ...prev, koala: url }));
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -179,6 +189,20 @@ export default function Home() {
     setTimeout(() => speak(desc), 300);
   }, [answerCount, speak]);
 
+  // kobra tetap pakai fetch by query seperti sebelumnya, TIDAK diubah
+  useEffect(() => {
+    choices.forEach((c) => {
+      if (c.id === "ular_kobra" && !photoUrls[c.id]) {
+        const query = videoQueryMap[c.id] ?? c.name;
+        fetchAnimalImage(query).then((url) => {
+          if (url) {
+            setPhotoUrls((prev) => ({ ...prev, [c.id]: url }));
+          }
+        });
+      }
+    });
+  }, [choices, photoUrls]);
+
   const goToNextOrFinish = useCallback(() => {
     rewardVideoRef.current?.pause();
     if (roundNumberRef.current >= TOTAL_ROUNDS) {
@@ -219,10 +243,11 @@ export default function Home() {
     };
   }, [screen, selectedId, timedOut, handleTimeout]);
 
-  // ambil video reward, KECUALI untuk hewan yang fotonya udah dikunci manual
+  // video reward: SEMUA hewan pakai video by query seperti sebelumnya (termasuk kobra),
+  // KECUALI koala yang langsung pakai foto terkunci di bagian render
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
-    if (MANUAL_IMAGE_IDS[currentAnimal.id]) return;
+    if (currentAnimal.id === "koala") return;
 
     let cancelled = false;
     const query = videoQueryMap[currentAnimal.id] ?? currentAnimal.name;
@@ -368,7 +393,7 @@ export default function Home() {
               const isCorrectChoice = currentAnimal.id === c.id;
               const showCorrectHighlight = !!selectedId && isCorrectChoice;
               const showWrongHighlight = wrongId === c.id;
-              const hasRealPhoto = MANUAL_IMAGE_IDS[c.id] && photoUrls[c.id];
+              const hasRealPhoto = REAL_PHOTO_IDS.includes(c.id) && photoUrls[c.id];
               return (
                 <button key={c.id} onClick={() => handleChoice(c.id)}
                   disabled={!!selectedId || timedOut}
@@ -412,11 +437,11 @@ export default function Home() {
           </h2>
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
-            {MANUAL_IMAGE_IDS[currentAnimal.id] ? (
-              photoUrls[currentAnimal.id] ? (
+            {currentAnimal.id === "koala" ? (
+              photoUrls["koala"] ? (
                 <img
-                  src={photoUrls[currentAnimal.id]}
-                  alt={currentAnimal.name}
+                  src={photoUrls["koala"]}
+                  alt="Koala"
                   className="w-full h-full object-cover"
                 />
               ) : (
