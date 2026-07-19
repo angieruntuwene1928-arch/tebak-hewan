@@ -27,11 +27,11 @@ const emojiMap: Record<string, string> = {
 
 const videoQueryMap: Record<string, string> = {
   singa: "lion", gajah: "elephant", jerapah: "giraffe", zebra: "zebra",
-  harimau: "tiger", panda: "panda", koala: "koala", kanguru: "kangaroo",
+  harimau: "tiger", panda: "panda", koala: "koala bear", kanguru: "kangaroo",
   buaya: "crocodile", gorila: "gorilla", rusa: "deer", kuda_nil: "hippo",
   badak: "rhino", unta: "camel", rubah: "fox", serigala: "wolf",
   beruang: "bear", elang: "eagle", burung_unta: "ostrich", penguin: "penguin",
-  flamingo: "flamingo", merak: "peacock", ular_kobra: "cobra snake",
+  flamingo: "flamingo", merak: "peacock", ular_kobra: "king cobra",
   kura_kura: "turtle", kelinci: "rabbit", tupai: "squirrel", landak: "hedgehog",
   kucing: "cat", anjing: "dog", lumba_lumba: "dolphin",
 };
@@ -258,16 +258,7 @@ export default function Home() {
     lastAnimalId.current = null;
     setScreen("game");
     generateRound();
-    if (bgmRef.current) {
-      console.log("BGM src:", bgmRef.current.currentSrc || bgmRef.current.src);
-      console.log("BGM readyState:", bgmRef.current.readyState);
-      bgmRef.current
-        .play()
-        .then(() => console.log("BGM play() succeeded"))
-        .catch((err) => console.error("BGM play() failed:", err));
-    } else {
-      console.error("BGM ref is null - audio element not mounted");
-    }
+    bgmRef.current?.play().catch(() => {});
   };
 
   const fireConfetti = () => {
