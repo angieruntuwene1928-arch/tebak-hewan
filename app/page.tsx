@@ -528,7 +528,7 @@ export default function Home() {
           )}
 
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
-            🦁 Tebak Hewan 🐘
+            🦁 Smart Zoo! 🐘
           </h1>
 
           {(bestScoreEver > 0 || bestStreakEver > 0) && (
