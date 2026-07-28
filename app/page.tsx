@@ -93,16 +93,6 @@ async function fetchAnimalVideo(query: string): Promise<string | null> {
   }
 }
 
-async function fetchAnimalSound(query: string): Promise<string | null> {
-  try {
-    const res = await fetch(`/api/animal-sound?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    return data?.url ?? null;
-  } catch {
-    return null;
-  }
-}
-
 async function fetchAnimalImage(query: string): Promise<string | null> {
   try {
     const res = await fetch(`/api/animal-image?q=${encodeURIComponent(query)}`);
@@ -137,9 +127,6 @@ export default function Home() {
   const [videoFailed, setVideoFailed] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
 
-  const [animalSoundUrl, setAnimalSoundUrl] = useState<string | null>(null);
-  const [soundLoading, setSoundLoading] = useState(false);
-
   const [roundNumber, setRoundNumber] = useState(1);
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongCount, setWrongCount] = useState(0);
@@ -150,8 +137,6 @@ export default function Home() {
   const [collectionVideoUrl, setCollectionVideoUrl] = useState<string | null>(null);
   const [collectionVideoLoading, setCollectionVideoLoading] = useState(false);
   const [collectionVideoFailed, setCollectionVideoFailed] = useState(false);
-  const [collectionSoundUrl, setCollectionSoundUrl] = useState<string | null>(null);
-  const [collectionSoundLoading, setCollectionSoundLoading] = useState(false);
 
   const [streak, setStreak] = useState(0);
   const [bestStreakEver, setBestStreakEver] = useState(0);
@@ -173,8 +158,6 @@ export default function Home() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const narrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rewardVideoRef = useRef<HTMLVideoElement | null>(null);
-  const animalSoundRef = useRef<HTMLAudioElement | null>(null);
-  const collectionAudioRef = useRef<HTMLAudioElement | null>(null);
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const photoCacheRef = useRef<Record<string, string>>({});
   const photoFetchingRef = useRef<Set<string>>(new Set());
@@ -243,9 +226,6 @@ export default function Home() {
   }, [selectedCategory]);
 
   const generateRound = useCallback(() => {
-    animalSoundRef.current?.pause();
-    collectionAudioRef.current?.pause();
-    
     const basePool = getAnimalPool();
     let pool = basePool;
     if (basePool.length > 1 && lastAnimalId.current) {
@@ -280,8 +260,6 @@ export default function Home() {
     setTimedOut(false);
     setVideoUrl(null);
     setVideoFailed(false);
-    setAnimalSoundUrl(null);
-    setSoundLoading(false);
     setNewlyCollected(false);
     setHintUsed(false);
     setEliminatedChoiceId(null);
@@ -306,8 +284,6 @@ export default function Home() {
 
   const goToNextOrFinish = useCallback(() => {
     rewardVideoRef.current?.pause();
-    animalSoundRef.current?.pause();
-    collectionAudioRef.current?.pause();
     if (narrationTimeoutRef.current) clearTimeout(narrationTimeoutRef.current);
     window.speechSynthesis.cancel();
     if (gameModeRef.current === "normal" && roundNumberRef.current >= TOTAL_ROUNDS) {
@@ -461,27 +437,6 @@ export default function Home() {
     confetti({ particleCount: 80, angle: 120, spread: 70, origin: { x: 1, y: 0 } });
   };
 
-  const playAnimalSound = async () => {
-    if (!currentAnimal || !animalSoundRef.current) return;
-    window.speechSynthesis.cancel();
-    if (animalSoundUrl) {
-      animalSoundRef.current.src = animalSoundUrl;
-      animalSoundRef.current.currentTime = 0;
-      animalSoundRef.current.play().catch(() => {});
-      return;
-    }
-    setSoundLoading(true);
-    const query = animalQueryMap[currentAnimal.id] ?? currentAnimal.name;
-    const url = await fetchAnimalSound(query);
-    setSoundLoading(false);
-    if (url && animalSoundRef.current) {
-      animalSoundRef.current.src = url;
-      animalSoundRef.current.currentTime = 0;
-      animalSoundRef.current.play().catch(() => {});
-      setAnimalSoundUrl(url);
-    }
-  };
-
   const useHint = () => {
     if (hintUsed || selectedId || !currentAnimal) return;
     const wrongChoices = choices.filter((c) => c.id !== currentAnimal.id);
@@ -493,8 +448,6 @@ export default function Home() {
 
   const handleChoice = (choiceId: string) => {
     if (selectedId || timedOut) return;
-    animalSoundRef.current?.pause();
-    collectionAudioRef.current?.pause();
     setSelectedId(choiceId);
 
     if (currentAnimal && choiceId === currentAnimal.id) {
@@ -559,8 +512,6 @@ export default function Home() {
   return (
     <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-200 to-lime-200">
       <audio ref={bgmRef} src="/music/bgm.mp3" loop preload="auto" />
-      <audio ref={animalSoundRef} src={animalSoundUrl ?? undefined} />
-      <audio ref={collectionAudioRef} src={collectionSoundUrl ?? undefined} />
 
       <div className="hidden lg:flex fixed left-0 top-0 h-screen w-24 overflow-hidden opacity-15 pointer-events-none z-0 justify-center">
         <div className="flex flex-col gap-10 text-5xl animate-scroll-up">
@@ -707,7 +658,6 @@ export default function Home() {
                     if (isCollected) {
                       setSelectedCollectionAnimal(a);
                       setCollectionVideoUrl(null);
-                      setCollectionSoundUrl(null);
                       setCollectionVideoFailed(false);
                       setScreen("collection-detail");
                     }
@@ -790,28 +740,6 @@ export default function Home() {
               💡 {funFactMap[selectedCollectionAnimal.id]}
             </p>
           )}
-
-          <button
-            onClick={async () => {
-              window.speechSynthesis.cancel();
-              if (collectionSoundUrl) {
-                collectionAudioRef.current?.play().catch(() => {});
-                return;
-              }
-              setCollectionSoundLoading(true);
-              const query = animalQueryMap[selectedCollectionAnimal.id] ?? selectedCollectionAnimal.name;
-              const url = await fetchAnimalSound(query);
-              setCollectionSoundLoading(false);
-              if (url) {
-                setCollectionSoundUrl(url);
-                setTimeout(() => collectionAudioRef.current?.play().catch(() => {}), 100);
-              }
-            }}
-            disabled={collectionSoundLoading}
-            className="px-6 py-3 rounded-full bg-purple-400 hover:bg-purple-500 disabled:opacity-60 text-white font-bold text-lg shadow-lg transition"
-          >
-            {collectionSoundLoading ? "⏳ Memuat..." : "🔊 Dengar Suaranya"}
-          </button>
         </div>
       )}
 
@@ -854,9 +782,9 @@ export default function Home() {
               <div>
                 <h3 className="text-xl font-bold text-orange-500 mb-1">🎉 Saat Jawaban Benar</h3>
                 <p>
-                  Kamu akan melihat video/foto asli hewan tersebut lengkap dengan suara aslinya,
-                  disusul fakta menarik (fun fact) yang akan dibacakan. Hewan yang baru pertama
-                  kali kamu jawab benar otomatis masuk ke Koleksi Hewan-mu!
+                  Kamu akan melihat video/foto asli hewan tersebut, disusul fakta menarik (fun fact)
+                  yang akan dibacakan. Hewan yang baru pertama kali kamu jawab benar otomatis masuk
+                  ke Koleksi Hewan-mu!
                 </p>
               </div>
 
@@ -1049,14 +977,6 @@ export default function Home() {
               💡 {funFactMap[currentAnimal.id]}
             </p>
           )}
-
-          <button
-            onClick={playAnimalSound}
-            disabled={soundLoading}
-            className="px-6 py-3 rounded-full bg-purple-400 hover:bg-purple-500 disabled:opacity-60 text-white font-bold text-lg shadow-lg transition"
-          >
-            {soundLoading ? "⏳ Memuat..." : "🔊 Dengar Suara Aslinya"}
-          </button>
 
           <div className="flex gap-4 mt-2">
             <button
