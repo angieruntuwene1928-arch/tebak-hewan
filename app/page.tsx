@@ -35,22 +35,20 @@ const emojiMap: Record<string, string> = {
 
 const animalQueryMap: Record<string, string> = {
   singa: "lion", gajah: "elephant", jerapah: "giraffe", zebra: "zebra",
-  harimau: "tiger", panda: "panda", koala: "koala bear", kanguru: "kangaroo",
+  harimau: "tiger", panda: "giant panda", koala: "koala", kanguru: "kangaroo",
   buaya: "crocodile", gorila: "gorilla", rusa: "deer", kuda_nil: "hippo",
   badak: "rhino", unta: "camel", rubah: "fox", serigala: "wolf",
   beruang: "bear", elang: "eagle", burung_unta: "ostrich", penguin: "penguin",
   flamingo: "flamingo", merak: "peacock", ular_kobra: "king cobra",
   kura_kura: "turtle", kelinci: "rabbit", tupai: "squirrel", landak: "hedgehog",
   kucing: "cat", anjing: "dog", lumba_lumba: "dolphin",
-  kuda: "horse", sapi: "cow", kambing: "goat", domba: "sheep", ayam: "chicken",
+  kuda: "horse", sapi: "dairy cow", kambing: "goat", domba: "sheep", ayam: "chicken",
   bebek: "duck", monyet: "monkey", paus: "whale", hiu: "shark", kupu_kupu: "butterfly",
 };
 
 const funFactMap: Record<string, string> = Object.fromEntries(
   animals.map((a) => [a.id, a.funFact])
 );
-
-const KOALA_IMAGE_ID = 9960;
 
 const categoryMap: Record<string, string> = {
   singa: "savana", gajah: "savana", jerapah: "savana", zebra: "savana", badak: "savana", unta: "savana",
@@ -108,16 +106,6 @@ async function fetchAnimalSound(query: string): Promise<string | null> {
 async function fetchAnimalImage(query: string): Promise<string | null> {
   try {
     const res = await fetch(`/api/animal-image?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    return data?.url ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchAnimalImageById(id: number): Promise<string | null> {
-  try {
-    const res = await fetch(`/api/animal-image?id=${id}`);
     const data = await res.json();
     return data?.url ?? null;
   } catch {
@@ -224,14 +212,7 @@ export default function Home() {
       if (savedName) setPlayerName(savedName);
     } catch {}
 
-    if (!photoCacheRef.current["koala"]) {
-      fetchAnimalImageById(KOALA_IMAGE_ID).then((url) => {
-        if (url) {
-          photoCacheRef.current["koala"] = url;
-          setPhotoUrls((prev) => ({ ...prev, koala: url }));
-        }
-      });
-    }
+
   }, []);
 
   const savePlayerName = () => {
@@ -310,7 +291,6 @@ export default function Home() {
 
   useEffect(() => {
     choices.forEach((c) => {
-      if (c.id === "koala") return;
       if (photoCacheRef.current[c.id] || photoFetchingRef.current.has(c.id)) return;
       photoFetchingRef.current.add(c.id);
       const query = animalQueryMap[c.id] ?? c.name;
@@ -482,19 +462,23 @@ export default function Home() {
   };
 
   const playAnimalSound = async () => {
-    if (!currentAnimal) return;
+    if (!currentAnimal || !animalSoundRef.current) return;
     window.speechSynthesis.cancel();
     if (animalSoundUrl) {
-      animalSoundRef.current?.play().catch(() => {});
+      animalSoundRef.current.src = animalSoundUrl;
+      animalSoundRef.current.currentTime = 0;
+      animalSoundRef.current.play().catch(() => {});
       return;
     }
     setSoundLoading(true);
     const query = animalQueryMap[currentAnimal.id] ?? currentAnimal.name;
     const url = await fetchAnimalSound(query);
     setSoundLoading(false);
-    if (url) {
+    if (url && animalSoundRef.current) {
+      animalSoundRef.current.src = url;
+      animalSoundRef.current.currentTime = 0;
+      animalSoundRef.current.play().catch(() => {});
       setAnimalSoundUrl(url);
-      setTimeout(() => animalSoundRef.current?.play().catch(() => {}), 100);
     }
   };
 
