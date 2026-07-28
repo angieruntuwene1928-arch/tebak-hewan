@@ -262,6 +262,9 @@ export default function Home() {
   }, [selectedCategory]);
 
   const generateRound = useCallback(() => {
+    animalSoundRef.current?.pause();
+    collectionAudioRef.current?.pause();
+    
     const basePool = getAnimalPool();
     let pool = basePool;
     if (basePool.length > 1 && lastAnimalId.current) {
@@ -323,6 +326,8 @@ export default function Home() {
 
   const goToNextOrFinish = useCallback(() => {
     rewardVideoRef.current?.pause();
+    animalSoundRef.current?.pause();
+    collectionAudioRef.current?.pause();
     if (narrationTimeoutRef.current) clearTimeout(narrationTimeoutRef.current);
     window.speechSynthesis.cancel();
     if (gameModeRef.current === "normal" && roundNumberRef.current >= TOTAL_ROUNDS) {
@@ -504,6 +509,8 @@ export default function Home() {
 
   const handleChoice = (choiceId: string) => {
     if (selectedId || timedOut) return;
+    animalSoundRef.current?.pause();
+    collectionAudioRef.current?.pause();
     setSelectedId(choiceId);
 
     if (currentAnimal && choiceId === currentAnimal.id) {
