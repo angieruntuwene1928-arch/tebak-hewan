@@ -44,3 +44,28 @@ body {
 .animate-shake {
   animation: shake 0.5s;
 }
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-8px); }
+  40%, 60% { transform: translateX(8px); }
+}
+.animate-shake {
+  animation: shake 0.5s;
+}
+
+@keyframes scrollUp {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+@keyframes scrollDown {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+.animate-scroll-up {
+  animation: scrollUp 40s linear infinite;
+}
+.animate-scroll-down {
+  animation: scrollDown 40s linear infinite;
+}
