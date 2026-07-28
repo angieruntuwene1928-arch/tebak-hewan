@@ -72,7 +72,7 @@ const categoryLabels: Record<string, string> = {
   lainnya: "🐾 Lainnya",
 };
 
-type Screen = "menu" | "game" | "result" | "finished" | "settings" | "manual" | "collection";
+type Screen = "menu" | "game" | "result" | "finished" | "settings" | "manual" | "collection" | "collection-detail";
 type Choice = { id: string; name: string; emoji: string };
 type GameMode = "normal" | "endless";
 
@@ -158,6 +158,12 @@ export default function Home() {
 
   const [collectedIds, setCollectedIds] = useState<string[]>([]);
   const [newlyCollected, setNewlyCollected] = useState(false);
+  const [selectedCollectionAnimal, setSelectedCollectionAnimal] = useState<Animal | null>(null);
+  const [collectionVideoUrl, setCollectionVideoUrl] = useState<string | null>(null);
+  const [collectionVideoLoading, setCollectionVideoLoading] = useState(false);
+  const [collectionVideoFailed, setCollectionVideoFailed] = useState(false);
+  const [collectionSoundUrl, setCollectionSoundUrl] = useState<string | null>(null);
+  const [collectionSoundLoading, setCollectionSoundLoading] = useState(false);
 
   const [streak, setStreak] = useState(0);
   const [bestStreakEver, setBestStreakEver] = useState(0);
@@ -180,6 +186,7 @@ export default function Home() {
   const narrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rewardVideoRef = useRef<HTMLVideoElement | null>(null);
   const animalSoundRef = useRef<HTMLAudioElement | null>(null);
+  const collectionAudioRef = useRef<HTMLAudioElement | null>(null);
   const bgmRef = useRef<HTMLAudioElement | null>(null);
   const photoCacheRef = useRef<Record<string, string>>({});
   const photoFetchingRef = useRef<Set<string>>(new Set());
@@ -390,6 +397,26 @@ export default function Home() {
   }, [screen, currentAnimal]);
 
   useEffect(() => {
+    if (screen !== "collection-detail" || !selectedCollectionAnimal) return;
+    if (selectedCollectionAnimal.id === "koala") return;
+
+    let cancelled = false;
+    const query = animalQueryMap[selectedCollectionAnimal.id] ?? selectedCollectionAnimal.name;
+    setCollectionVideoLoading(true);
+
+    fetchAnimalVideo(query).then((url) => {
+      if (cancelled) return;
+      setCollectionVideoLoading(false);
+      if (url) setCollectionVideoUrl(url);
+      else setCollectionVideoFailed(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [screen, selectedCollectionAnimal]);
+
+  useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
     if (narrationTimeoutRef.current) clearTimeout(narrationTimeoutRef.current);
 
@@ -541,6 +568,7 @@ export default function Home() {
     <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-200 to-lime-200">
       <audio ref={bgmRef} src="/music/bgm.mp3" loop preload="auto" />
       <audio ref={animalSoundRef} src={animalSoundUrl ?? undefined} />
+      <audio ref={collectionAudioRef} src={collectionSoundUrl ?? undefined} />
 
       <div className="hidden lg:flex fixed left-0 top-0 h-screen w-24 overflow-hidden opacity-15 pointer-events-none z-0 justify-center">
         <div className="flex flex-col gap-10 text-5xl animate-scroll-up">
@@ -682,10 +710,20 @@ export default function Home() {
             {animals.map((a) => {
               const isCollected = collectedIds.includes(a.id);
               return (
-                <div
+                <button
+                  onClick={() => {
+                    if (isCollected) {
+                      setSelectedCollectionAnimal(a);
+                      setCollectionVideoUrl(null);
+                      setCollectionSoundUrl(null);
+                      setCollectionVideoFailed(false);
+                      setScreen("collection-detail");
+                    }
+                  }}
                   key={a.id}
+                  disabled={!isCollected}
                   className={`aspect-square rounded-2xl shadow-lg flex flex-col items-center justify-center gap-1 p-2 transition ${
-                    isCollected ? "bg-white" : "bg-white/40"
+                    isCollected ? "bg-white hover:scale-105 cursor-pointer" : "bg-white/40 cursor-not-allowed"
                   }`}
                 >
                   <span className={`text-3xl md:text-4xl ${isCollected ? "" : "grayscale opacity-40"}`}>
@@ -698,7 +736,7 @@ export default function Home() {
                   >
                     {isCollected ? a.name : "???"}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -708,6 +746,78 @@ export default function Home() {
             className="mt-4 px-8 py-4 rounded-full bg-white text-slate-700 font-bold text-xl shadow-lg hover:scale-105 transition"
           >
             🏠 Kembali ke Menu
+          </button>
+        </div>
+      )}
+
+      {screen === "collection-detail" && selectedCollectionAnimal && (
+        <div className="animate-fadein relative z-10 min-h-screen flex flex-col items-center justify-center gap-5 px-4 py-8">
+          <button
+            onClick={() => setScreen("collection")}
+            className="absolute top-4 left-4 px-6 py-3 rounded-full bg-white text-slate-700 font-bold shadow-lg hover:scale-105 transition"
+          >
+            ← Kembali
+          </button>
+
+          <h2 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow text-center mt-8">
+            {emojiMap[selectedCollectionAnimal.id] ?? "🐾"} {selectedCollectionAnimal.name}
+          </h2>
+
+          <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
+            {selectedCollectionAnimal.id === "koala" ? (
+              photoUrls["koala"] ? (
+                <img
+                  src={photoUrls["koala"]}
+                  alt="Koala"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="text-6xl animate-pulse">⏳</div>
+              )
+            ) : collectionVideoUrl && !collectionVideoFailed ? (
+              <video
+                key={selectedCollectionAnimal.id}
+                src={collectionVideoUrl}
+                autoPlay
+                loop
+                playsInline
+                onError={() => setCollectionVideoFailed(true)}
+                className="w-full h-full object-cover"
+              />
+            ) : collectionVideoLoading ? (
+              <div className="text-6xl animate-pulse">⏳</div>
+            ) : (
+              <div className="text-9xl animate-bounce">
+                {emojiMap[selectedCollectionAnimal.id] ?? "🐾"}
+              </div>
+            )}
+          </div>
+
+          {funFactMap[selectedCollectionAnimal.id] && (
+            <p className="max-w-md text-center text-white/90 text-base md:text-lg italic px-4">
+              💡 {funFactMap[selectedCollectionAnimal.id]}
+            </p>
+          )}
+
+          <button
+            onClick={async () => {
+              if (collectionSoundUrl) {
+                collectionAudioRef.current?.play().catch(() => {});
+                return;
+              }
+              setCollectionSoundLoading(true);
+              const query = animalQueryMap[selectedCollectionAnimal.id] ?? selectedCollectionAnimal.name;
+              const url = await fetchAnimalSound(query);
+              setCollectionSoundLoading(false);
+              if (url) {
+                setCollectionSoundUrl(url);
+                setTimeout(() => collectionAudioRef.current?.play().catch(() => {}), 100);
+              }
+            }}
+            disabled={collectionSoundLoading}
+            className="px-6 py-3 rounded-full bg-purple-400 hover:bg-purple-500 disabled:opacity-60 text-white font-bold text-lg shadow-lg transition"
+          >
+            {collectionSoundLoading ? "⏳ Memuat..." : "🔊 Dengar Suaranya"}
           </button>
         </div>
       )}
