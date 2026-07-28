@@ -15,38 +15,44 @@ const fallbackAnimalSounds: Record<string, string> = {
   sapi: "https://upload.wikimedia.org/wikipedia/commons/e/ee/Cow_female_sound.ogg",
   duck: "https://upload.wikimedia.org/wikipedia/commons/2/22/Anas_acuta%27s_quack.ogg",
   bebek: "https://upload.wikimedia.org/wikipedia/commons/2/22/Anas_acuta%27s_quack.ogg",
+  tiger: "https://upload.wikimedia.org/wikipedia/commons/0/04/Tiger_Roar.ogg",
+  harimau: "https://upload.wikimedia.org/wikipedia/commons/0/04/Tiger_Roar.ogg",
+  monkey: "https://upload.wikimedia.org/wikipedia/commons/9/9d/Monkey_calls_0.ogg",
+  monyet: "https://upload.wikimedia.org/wikipedia/commons/9/9d/Monkey_calls_0.ogg",
+  sheep: "https://upload.wikimedia.org/wikipedia/commons/2/2c/Domestic_sheep_0.ogg",
+  domba: "https://upload.wikimedia.org/wikipedia/commons/2/2c/Domestic_sheep_0.ogg",
+  goat: "https://upload.wikimedia.org/wikipedia/commons/6/6c/Goat_bleating.ogg",
+  kambing: "https://upload.wikimedia.org/wikipedia/commons/6/6c/Goat_bleating.ogg",
+  chicken: "https://upload.wikimedia.org/wikipedia/commons/a/a9/Domestic_Rooster_%28Gallus_gallus_domesticus%29_2.ogg",
+  ayam: "https://upload.wikimedia.org/wikipedia/commons/a/a9/Domestic_Rooster_%28Gallus_gallus_domesticus%29_2.ogg",
 };
 
 async function resolveAudioUrl(searchTerm: string): Promise<string | null> {
   const searchQueries = [
-    `${searchTerm} sound short`,
     `${searchTerm} call`,
-    `${searchTerm} short`,
-    `${searchTerm} roar call`,
-    `${searchTerm} bark sound`,
-    `${searchTerm} meow`,
-    `${searchTerm} cry`,
-    searchTerm,
-    `${searchTerm} sound`,
+    `${searchTerm} sound short`,
     `${searchTerm} roar`,
     `${searchTerm} bark`,
-    `${searchTerm} neigh`,
+    `${searchTerm} cry`,
+    `${searchTerm} meow`,
     `${searchTerm} moo`,
-    `${searchTerm} trumpet`,
+    `${searchTerm} quack`,
+    `${searchTerm} chirp`,
     `${searchTerm} audio`,
+    `${searchTerm} vocalization`,
+    searchTerm,
   ];
 
   for (const query of searchQueries) {
     try {
       const searchRes = await fetch(
-        `https://commons.wikimedia.org/w/api.php?action=query&list=search&srnamespace=6&srlimit=30&format=json&srsearch=${encodeURIComponent(query)}`
+        `https://commons.wikimedia.org/w/api.php?action=query&list=search&srnamespace=6&srlimit=40&format=json&srsearch=${encodeURIComponent(query)}`
       );
       const searchData = await searchRes.json();
       const results = searchData?.query?.search ?? [];
       const audioResults = results.filter((r: any) => /\.(ogg|mp3|wav|oga|opus|webm)$/i.test(r.title));
 
       const shortClips: any[] = [];
-      const mediumClips: any[] = [];
 
       for (const audioResult of audioResults) {
         try {
@@ -64,13 +70,9 @@ async function resolveAudioUrl(searchTerm: string): Promise<string | null> {
 
           if (!url) continue;
 
-          // Prioritize short clips (0.5 - 5 seconds)
-          if (duration && duration >= 0.5 && duration <= 5) {
+          // Only accept clips up to 7 seconds
+          if (!duration || (duration >= 0.5 && duration <= 7)) {
             shortClips.push({ url, duration });
-          } else if (!duration) {
-            shortClips.push({ url, duration: null });
-          } else if (duration && duration <= 10) {
-            mediumClips.push({ url, duration });
           }
         } catch {
           // Continue to next result
@@ -79,10 +81,6 @@ async function resolveAudioUrl(searchTerm: string): Promise<string | null> {
 
       if (shortClips.length > 0) {
         return shortClips[0].url;
-      }
-
-      if (mediumClips.length > 0) {
-        return mediumClips[0].url;
       }
     } catch {
       // Try the next search term if one lookup fails.
