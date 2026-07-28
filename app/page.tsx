@@ -132,13 +132,6 @@ export default function Home() {
   }, [roundNumber]);
 
   useEffect(() => {
-    if (bgmRef.current && screen !== "result") {
-      bgmRef.current.volume = musicVolume;
-      bgmRef.current.muted = musicVolume === 0;
-    }
-  }, [musicVolume, screen]);
-
-  useEffect(() => {
     if (!bgmRef.current) return;
     if (screen === "result") {
       bgmRef.current.volume = Math.min(musicVolume, 0.08);
@@ -417,19 +410,6 @@ export default function Home() {
 
       {screen === "menu" && (
         <div className="relative z-10 min-h-screen flex flex-col items-center justify-center gap-10 px-4">
-          <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/90 rounded-full px-4 py-2 shadow-lg">
-            <span className="text-xl">{musicVolume === 0 ? "🔇" : "🎵"}</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={musicVolume}
-              onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
-              className="w-24 accent-orange-400"
-            />
-          </div>
-
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
             🦁 Tebak Hewan 🐘
           </h1>
@@ -465,8 +445,8 @@ export default function Home() {
               <div>
                 <h3 className="text-xl font-bold text-orange-500 mb-1">▶️ Cara Mulai</h3>
                 <p>
-                  Tekan tombol <strong>"Main"</strong> di menu utama untuk memulai. Kamu juga bisa
-                  mengatur volume musik latar lewat slider musik di pojok kiri atas menu.
+                  Tekan tombol <strong>"Main"</strong> di menu utama untuk memulai. Kamu bisa
+                  mengatur volume musik latar dan narasi lewat menu Pengaturan (⚙️).
                 </p>
               </div>
 
@@ -493,8 +473,8 @@ export default function Home() {
               <div>
                 <h3 className="text-xl font-bold text-orange-500 mb-1">⚙️ Pengaturan</h3>
                 <p>
-                  Tekan ikon gear (⚙️) di pojok kanan atas untuk mengatur volume suara/narasi dan
-                  jumlah pilihan jawaban (2, 3, atau 4 pilihan).
+                  Tekan ikon gear (⚙️) di pojok kanan atas untuk mengatur volume musik latar,
+                  volume suara/narasi, dan jumlah pilihan jawaban (2, 3, atau 4 pilihan).
                 </p>
               </div>
 
@@ -689,6 +669,14 @@ export default function Home() {
         <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
           <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md flex flex-col gap-6">
             <h2 className="text-3xl font-bold text-center text-slate-700">⚙️ Pengaturan</h2>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-semibold text-slate-600">
+                🎵 Volume Musik Latar: {Math.round(musicVolume * 100)}%
+              </label>
+              <input type="range" min={0} max={1} step={0.05} value={musicVolume}
+                onChange={(e) => setMusicVolume(parseFloat(e.target.value))} />
+            </div>
 
             <div className="flex flex-col gap-2">
               <label className="font-semibold text-slate-600">
