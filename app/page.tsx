@@ -15,7 +15,7 @@ const animals = animalsData.animals as Animal[];
 const TOTAL_ROUNDS = 10;
 const ROUND_TIME = 30;
 const WRONG_FEEDBACK_DELAY = 1800;
-const NARRATION_DELAY = 3200;
+const NARRATION_DELAY = 2600;
 
 const emojiMap: Record<string, string> = {
   singa: "🦁", gajah: "🐘", jerapah: "🦒", zebra: "🦓", harimau: "🐯",
@@ -46,9 +46,11 @@ const funFactMap: Record<string, string> = Object.fromEntries(
   animals.map((a) => [a.id, a.funFact])
 );
 
+// koala dikunci ke 1 foto asli spesifik by ID Pixabay, karena hasil pencarian
+// otomatis sering nangkep gambar kartun. Hewan lain pakai pencarian biasa.
 const KOALA_IMAGE_ID = 9960;
 
-type Screen = "menu" | "game" | "result" | "finished" | "settings" | "manual";
+type Screen = "menu" | "game" | "result" | "finished" | "settings";
 type Choice = { id: string; name: string; emoji: string };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -132,14 +134,11 @@ export default function Home() {
   }, [roundNumber]);
 
   useEffect(() => {
-    if (!bgmRef.current) return;
-    if (screen === "result") {
-      bgmRef.current.volume = Math.min(musicVolume, 0.08);
-    } else {
+    if (bgmRef.current) {
       bgmRef.current.volume = musicVolume;
       bgmRef.current.muted = musicVolume === 0;
     }
-  }, [screen, musicVolume]);
+  }, [musicVolume]);
 
   useEffect(() => {
     if (!photoUrls["koala"]) {
@@ -352,12 +351,6 @@ export default function Home() {
   };
   const closeSettings = () => setScreen(prevScreen);
 
-  const openManual = () => {
-    setPrevScreen(screen);
-    setScreen("manual");
-  };
-  const closeManual = () => setScreen(prevScreen);
-
   const scoreMessage = () => {
     const ratio = correctCount / TOTAL_ROUNDS;
     if (ratio === 1) return "Sempurna! Kamu Jagoan Hewan! 🏆";
@@ -391,12 +384,8 @@ export default function Home() {
         <span>🌿</span><span>🦓</span><span>☁️</span><span>🌳</span>
       </div>
 
-      {screen !== "settings" && screen !== "manual" && (
+      {screen !== "settings" && (
         <div className="absolute top-4 right-4 flex gap-3 z-20">
-          <button onClick={openManual} aria-label="Cara Bermain"
-            className="w-12 h-12 rounded-full bg-white/90 shadow-lg text-2xl flex items-center justify-center hover:scale-110 transition">
-            ❓
-          </button>
           <button onClick={openSettings} aria-label="Pengaturan"
             className="w-12 h-12 rounded-full bg-white/90 shadow-lg text-2xl flex items-center justify-center hover:scale-110 transition">
             ⚙️
@@ -410,6 +399,19 @@ export default function Home() {
 
       {screen === "menu" && (
         <div className="relative z-10 min-h-screen flex flex-col items-center justify-center gap-10 px-4">
+          <div className="absolute top-4 left-4 flex items-center gap-2 bg-white/90 rounded-full px-4 py-2 shadow-lg">
+            <span className="text-xl">{musicVolume === 0 ? "🔇" : "🎵"}</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={musicVolume}
+              onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+              className="w-24 accent-orange-400"
+            />
+          </div>
+
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
             🦁 Tebak Hewan 🐘
           </h1>
@@ -417,83 +419,6 @@ export default function Home() {
             className="px-12 py-5 rounded-full bg-orange-400 hover:bg-orange-500 active:scale-95 transition text-white text-3xl font-bold shadow-xl">
             ▶️ Main
           </button>
-          <button
-            onClick={openManual}
-            className="px-8 py-3 rounded-full bg-white/90 hover:bg-white transition text-slate-700 text-lg font-bold shadow-lg"
-          >
-            📖 Cara Bermain
-          </button>
-        </div>
-      )}
-
-      {screen === "manual" && (
-        <div className="relative z-10 min-h-screen flex flex-col items-center px-4 py-10 gap-6">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-10 w-full max-w-2xl flex flex-col gap-6">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-center text-slate-700">
-              📖 Cara Bermain Tebak Hewan
-            </h2>
-
-            <div className="flex flex-col gap-4 text-slate-700">
-              <div>
-                <h3 className="text-xl font-bold text-orange-500 mb-1">🎯 Tujuan Permainan</h3>
-                <p>
-                  Tebak nama hewan yang benar berdasarkan deskripsi/petunjuk yang muncul di layar.
-                  Setiap permainan terdiri dari 10 soal.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-orange-500 mb-1">▶️ Cara Mulai</h3>
-                <p>
-                  Tekan tombol <strong>"Main"</strong> di menu utama untuk memulai. Kamu bisa
-                  mengatur volume musik latar dan narasi lewat menu Pengaturan (⚙️).
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-orange-500 mb-1">🐾 Saat Bermain</h3>
-                <ul className="list-disc list-inside flex flex-col gap-1">
-                  <li>Deskripsi hewan akan muncul di tengah layar, dan dibacakan otomatis.</li>
-                  <li>Tekan tombol <strong>"🔊 Baca Ulang"</strong> kalau ingin mendengar deskripsinya lagi.</li>
-                  <li>Pilih salah satu dari beberapa gambar hewan di bawah sebagai jawabanmu.</li>
-                  <li>Kamu punya waktu 30 detik untuk menjawab setiap soal — perhatikan timer di atas!</li>
-                  <li>Jawaban benar akan langsung ditandai hijau, jawaban salah ditandai merah.</li>
-                  <li>Kalau jawaban salah atau waktu habis, permainan otomatis lanjut ke soal berikutnya.</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-orange-500 mb-1">🎉 Saat Jawaban Benar</h3>
-                <p>
-                  Kamu akan melihat video/gambar asli hewan tersebut lengkap dengan suara aslinya,
-                  disusul dengan fakta menarik (fun fact) tentang hewan itu yang akan dibacakan.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-orange-500 mb-1">⚙️ Pengaturan</h3>
-                <p>
-                  Tekan ikon gear (⚙️) di pojok kanan atas untuk mengatur volume musik latar,
-                  volume suara/narasi, dan jumlah pilihan jawaban (2, 3, atau 4 pilihan).
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-orange-500 mb-1">🏆 Skor Akhir</h3>
-                <p>
-                  Setelah 10 soal selesai, kamu akan melihat jumlah jawaban benar dan salah.
-                  Tekan <strong>"Main Lagi"</strong> untuk mencoba lagi dengan soal yang diacak ulang!
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={closeManual}
-              className="mt-2 px-6 py-3 rounded-full bg-orange-400 hover:bg-orange-500 text-white font-bold text-lg shadow self-center"
-            >
-              ✅ Mengerti, Ayo Main!
-            </button>
-          </div>
         </div>
       )}
 
@@ -669,14 +594,6 @@ export default function Home() {
         <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
           <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md flex flex-col gap-6">
             <h2 className="text-3xl font-bold text-center text-slate-700">⚙️ Pengaturan</h2>
-
-            <div className="flex flex-col gap-2">
-              <label className="font-semibold text-slate-600">
-                🎵 Volume Musik Latar: {Math.round(musicVolume * 100)}%
-              </label>
-              <input type="range" min={0} max={1} step={0.05} value={musicVolume}
-                onChange={(e) => setMusicVolume(parseFloat(e.target.value))} />
-            </div>
 
             <div className="flex flex-col gap-2">
               <label className="font-semibold text-slate-600">

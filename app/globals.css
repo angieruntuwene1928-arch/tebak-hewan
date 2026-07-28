@@ -69,3 +69,18 @@ body {
 .animate-scroll-down {
   animation: scrollDown 40s linear infinite;
 }
+
+@keyframes scroll-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+@keyframes scroll-down {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+.animate-scroll-up {
+  animation: scroll-up 30s linear infinite;
+}
+.animate-scroll-down {
+  animation: scroll-down 30s linear infinite;
+}
