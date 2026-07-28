@@ -478,6 +478,7 @@ export default function Home() {
 
   const playAnimalSound = async () => {
     if (!currentAnimal) return;
+    window.speechSynthesis.cancel();
     if (animalSoundUrl) {
       animalSoundRef.current?.play().catch(() => {});
       return;
@@ -801,6 +802,7 @@ export default function Home() {
 
           <button
             onClick={async () => {
+              window.speechSynthesis.cancel();
               if (collectionSoundUrl) {
                 collectionAudioRef.current?.play().catch(() => {});
                 return;

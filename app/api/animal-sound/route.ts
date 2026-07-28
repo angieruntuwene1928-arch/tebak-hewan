@@ -2,35 +2,51 @@ import { NextRequest, NextResponse } from "next/server";
 
 const fallbackAnimalSounds: Record<string, string> = {
   cat: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Meow_domestic_cat.ogg",
+  kucing: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Meow_domestic_cat.ogg",
   dog: "https://upload.wikimedia.org/wikipedia/commons/6/66/Perro_ladrando.ogg",
+  anjing: "https://upload.wikimedia.org/wikipedia/commons/6/66/Perro_ladrando.ogg",
   horse: "https://upload.wikimedia.org/wikipedia/commons/d/db/Wiehern.ogg",
+  kuda: "https://upload.wikimedia.org/wikipedia/commons/d/db/Wiehern.ogg",
   elephant: "https://upload.wikimedia.org/wikipedia/commons/4/40/Elephant_voice_-_trumpeting.ogg",
+  gajah: "https://upload.wikimedia.org/wikipedia/commons/4/40/Elephant_voice_-_trumpeting.ogg",
   singa: "https://upload.wikimedia.org/wikipedia/commons/d/d2/Lion_roar_-_01_-_SoundBible.com.ogg",
   lion: "https://upload.wikimedia.org/wikipedia/commons/d/d2/Lion_roar_-_01_-_SoundBible.com.ogg",
+  cow: "https://upload.wikimedia.org/wikipedia/commons/e/ee/Cow_female_sound.ogg",
+  sapi: "https://upload.wikimedia.org/wikipedia/commons/e/ee/Cow_female_sound.ogg",
+  duck: "https://upload.wikimedia.org/wikipedia/commons/2/22/Anas_acuta%27s_quack.ogg",
+  bebek: "https://upload.wikimedia.org/wikipedia/commons/2/22/Anas_acuta%27s_quack.ogg",
 };
 
 async function resolveAudioUrl(searchTerm: string): Promise<string | null> {
   const searchQueries = [
+    `${searchTerm} sound short`,
+    `${searchTerm} call`,
+    `${searchTerm} short`,
+    `${searchTerm} roar call`,
+    `${searchTerm} bark sound`,
+    `${searchTerm} meow`,
+    `${searchTerm} cry`,
     searchTerm,
-    `${searchTerm} call sound`,
+    `${searchTerm} sound`,
     `${searchTerm} roar`,
     `${searchTerm} bark`,
-    `${searchTerm} meow`,
     `${searchTerm} neigh`,
     `${searchTerm} moo`,
     `${searchTerm} trumpet`,
-    `${searchTerm} sound`,
     `${searchTerm} audio`,
   ];
 
   for (const query of searchQueries) {
     try {
       const searchRes = await fetch(
-        `https://commons.wikimedia.org/w/api.php?action=query&list=search&srnamespace=6&srlimit=20&format=json&srsearch=${encodeURIComponent(query)}`
+        `https://commons.wikimedia.org/w/api.php?action=query&list=search&srnamespace=6&srlimit=30&format=json&srsearch=${encodeURIComponent(query)}`
       );
       const searchData = await searchRes.json();
       const results = searchData?.query?.search ?? [];
-      const audioResults = results.filter((r: any) => /\.(ogg|mp3|wav|oga|opus)$/i.test(r.title));
+      const audioResults = results.filter((r: any) => /\.(ogg|mp3|wav|oga|opus|webm)$/i.test(r.title));
+
+      const shortClips: any[] = [];
+      const mediumClips: any[] = [];
 
       for (const audioResult of audioResults) {
         try {
@@ -46,13 +62,27 @@ async function resolveAudioUrl(searchTerm: string): Promise<string | null> {
           const url = info?.url ?? null;
           const duration = info?.duration ?? null;
 
-          // Prefer clips under 5 seconds, but accept longer ones if nothing else found
-          if (url && (!duration || duration <= 5)) {
-            return url;
+          if (!url) continue;
+
+          // Prioritize short clips (0.5 - 5 seconds)
+          if (duration && duration >= 0.5 && duration <= 5) {
+            shortClips.push({ url, duration });
+          } else if (!duration) {
+            shortClips.push({ url, duration: null });
+          } else if (duration && duration <= 10) {
+            mediumClips.push({ url, duration });
           }
         } catch {
           // Continue to next result
         }
+      }
+
+      if (shortClips.length > 0) {
+        return shortClips[0].url;
+      }
+
+      if (mediumClips.length > 0) {
+        return mediumClips[0].url;
       }
     } catch {
       // Try the next search term if one lookup fails.
