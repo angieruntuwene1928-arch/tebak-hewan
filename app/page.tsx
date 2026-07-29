@@ -51,6 +51,13 @@ const funFactMap: Record<string, string> = Object.fromEntries(
   animals.map((a) => [a.id, a.funFact])
 );
 
+// panda & koala dikunci ke foto asli spesifik (verified manual), karena
+// pencarian otomatis sering nangkep kartun/ilustrasi buat 2 hewan ini
+const FORCE_PHOTO_IDS: Record<string, number> = {
+  koala: 9960,
+  panda: 1236875,
+};
+
 const categoryMap: Record<string, string> = {
   singa: "savana", gajah: "savana", jerapah: "savana", zebra: "savana", badak: "savana", unta: "savana",
   harimau: "hutan", panda: "hutan", koala: "hutan", gorila: "hutan", rusa: "hutan", rubah: "hutan",
@@ -107,6 +114,16 @@ async function fetchAnimalImage(query: string): Promise<string | null> {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
+    const data = await res.json();
+    return data?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAnimalImageById(id: number): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/animal-image?id=${id}`);
     const data = await res.json();
     return data?.url ?? null;
   } catch {
@@ -184,10 +201,6 @@ export default function Home() {
     gameModeRef.current = gameMode;
   }, [gameMode]);
 
-  // Try to autoplay bgm as soon as the page loads. Most browsers block
-  // unmuted autoplay until there's some user interaction, so we also
-  // attach a one-time listener that starts the music on the first
-  // click/keypress/tap anywhere on the page as a fallback.
   useEffect(() => {
     const tryPlay = () => {
       bgmRef.current?.play().catch(() => {});
@@ -238,7 +251,16 @@ export default function Home() {
       if (savedName) setPlayerName(savedName);
     } catch {}
 
-
+    Object.entries(FORCE_PHOTO_IDS).forEach(([id, pixabayId]) => {
+      if (!photoCacheRef.current[id]) {
+        fetchAnimalImageById(pixabayId).then((url) => {
+          if (url) {
+            photoCacheRef.current[id] = url;
+            setPhotoUrls((prev) => ({ ...prev, [id]: url }));
+          }
+        });
+      }
+    });
   }, []);
 
   const savePlayerName = () => {
@@ -312,6 +334,7 @@ export default function Home() {
 
   useEffect(() => {
     choices.forEach((c) => {
+      if (FORCE_PHOTO_IDS[c.id]) return;
       if (photoCacheRef.current[c.id] || photoFetchingRef.current.has(c.id)) return;
       photoFetchingRef.current.add(c.id);
       const query = animalQueryMap[c.id] ?? c.name;
@@ -327,8 +350,6 @@ export default function Home() {
     });
   }, [choices]);
 
-  // Fetches a real photo for an animal (used as a fallback whenever
-  // video isn't available or fails to load) and caches it.
   const ensurePhotoFor = useCallback((id: string, query: string) => {
     if (photoCacheRef.current[id] || photoFetchingRef.current.has(id)) return;
     photoFetchingRef.current.add(id);
@@ -398,10 +419,9 @@ export default function Home() {
     };
   }, [screen, selectedId, timedOut, handleTimeout]);
 
-  // Result screen: try video first; if it fails or times out, fall back
-  // to a real photo; if that also fails, the UI falls back to the emoji.
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
+    if (FORCE_PHOTO_IDS[currentAnimal.id]) return;
 
     let cancelled = false;
     const query = animalQueryMap[currentAnimal.id] ?? currentAnimal.name;
@@ -427,8 +447,6 @@ export default function Home() {
     };
   }, [screen, currentAnimal, ensurePhotoFor]);
 
-  // Once the video errors out in the browser (e.g. broken/irrelevant URL),
-  // fall back to fetching a real photo instead.
   useEffect(() => {
     if (!videoFailed || !currentAnimal) return;
     if (photoCacheRef.current[currentAnimal.id]) return;
@@ -445,6 +463,7 @@ export default function Home() {
 
   useEffect(() => {
     if (screen !== "collection-detail" || !selectedCollectionAnimal) return;
+    if (FORCE_PHOTO_IDS[selectedCollectionAnimal.id]) return;
 
     let cancelled = false;
     const query = animalQueryMap[selectedCollectionAnimal.id] ?? selectedCollectionAnimal.name;
