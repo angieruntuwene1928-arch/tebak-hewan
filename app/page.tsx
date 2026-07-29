@@ -170,6 +170,35 @@ export default function Home() {
     gameModeRef.current = gameMode;
   }, [gameMode]);
 
+  // Try to autoplay bgm as soon as the page loads. Most browsers block
+  // unmuted autoplay until there's some user interaction, so we also
+  // attach a one-time listener that starts the music on the first
+  // click/keypress/tap anywhere on the page as a fallback.
+  useEffect(() => {
+    const tryPlay = () => {
+      bgmRef.current?.play().catch(() => {});
+    };
+
+    tryPlay();
+
+    const handleFirstInteraction = () => {
+      tryPlay();
+      window.removeEventListener("click", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
+    };
+
+    window.addEventListener("click", handleFirstInteraction);
+    window.addEventListener("keydown", handleFirstInteraction);
+    window.addEventListener("touchstart", handleFirstInteraction);
+
+    return () => {
+      window.removeEventListener("click", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
+    };
+  }, []);
+
   useEffect(() => {
     if (!bgmRef.current) return;
     if (screen === "result") {
@@ -511,7 +540,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-200 to-lime-200">
-      <audio ref={bgmRef} src="/music/bgm.mp3" loop preload="auto" />
+      <audio ref={bgmRef} src="/music/bgm.mp3" loop preload="auto" autoPlay />
 
       <div className="hidden lg:flex fixed left-0 top-0 h-screen w-24 overflow-hidden opacity-15 pointer-events-none z-0 justify-center">
         <div className="flex flex-col gap-10 text-5xl animate-scroll-up">
@@ -558,7 +587,7 @@ export default function Home() {
           )}
 
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
-            🦁 Tebak Hewan 🐘
+            🦁 Secret Zoo 🐘
           </h1>
 
           {(bestScoreEver > 0 || bestStreakEver > 0) && (
