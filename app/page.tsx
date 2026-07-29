@@ -16,6 +16,7 @@ const TOTAL_ROUNDS = 20;
 const ROUND_TIME = 30;
 const WRONG_FEEDBACK_DELAY = 1800;
 const NARRATION_DELAY = 3200;
+const MEDIA_FETCH_TIMEOUT = 6000;
 const COLLECTION_STORAGE_KEY = "tebak-hewan-collection";
 const BEST_SCORE_STORAGE_KEY = "tebak-hewan-best-score";
 const BEST_STREAK_STORAGE_KEY = "tebak-hewan-best-streak";
@@ -85,7 +86,12 @@ function shuffle<T>(arr: T[]): T[] {
 
 async function fetchAnimalVideo(query: string): Promise<string | null> {
   try {
-    const res = await fetch(`/api/animal-video?q=${encodeURIComponent(query)}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT);
+    const res = await fetch(`/api/animal-video?q=${encodeURIComponent(query)}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
     const data = await res.json();
     return data?.url ?? null;
   } catch {
@@ -95,7 +101,12 @@ async function fetchAnimalVideo(query: string): Promise<string | null> {
 
 async function fetchAnimalImage(query: string): Promise<string | null> {
   try {
-    const res = await fetch(`/api/animal-image?q=${encodeURIComponent(query)}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT);
+    const res = await fetch(`/api/animal-image?q=${encodeURIComponent(query)}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
     const data = await res.json();
     return data?.url ?? null;
   } catch {
@@ -119,6 +130,7 @@ export default function Home() {
   const [wrongId, setWrongId] = useState<string | null>(null);
 
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const photoFailedRef = useRef<Set<string>>(new Set());
 
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
   const [timedOut, setTimedOut] = useState(false);
@@ -126,6 +138,7 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFailed, setVideoFailed] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [resultImageLoading, setResultImageLoading] = useState(false);
 
   const [roundNumber, setRoundNumber] = useState(1);
   const [correctCount, setCorrectCount] = useState(0);
@@ -137,6 +150,7 @@ export default function Home() {
   const [collectionVideoUrl, setCollectionVideoUrl] = useState<string | null>(null);
   const [collectionVideoLoading, setCollectionVideoLoading] = useState(false);
   const [collectionVideoFailed, setCollectionVideoFailed] = useState(false);
+  const [collectionImageLoading, setCollectionImageLoading] = useState(false);
 
   const [streak, setStreak] = useState(0);
   const [bestStreakEver, setBestStreakEver] = useState(0);
@@ -306,10 +320,28 @@ export default function Home() {
         if (url) {
           photoCacheRef.current[c.id] = url;
           setPhotoUrls((prev) => ({ ...prev, [c.id]: url }));
+        } else {
+          photoFailedRef.current.add(c.id);
         }
       });
     });
   }, [choices]);
+
+  // Fetches a real photo for an animal (used as a fallback whenever
+  // video isn't available or fails to load) and caches it.
+  const ensurePhotoFor = useCallback((id: string, query: string) => {
+    if (photoCacheRef.current[id] || photoFetchingRef.current.has(id)) return;
+    photoFetchingRef.current.add(id);
+    fetchAnimalImage(query).then((url) => {
+      photoFetchingRef.current.delete(id);
+      if (url) {
+        photoCacheRef.current[id] = url;
+        setPhotoUrls((prev) => ({ ...prev, [id]: url }));
+      } else {
+        photoFailedRef.current.add(id);
+      }
+    });
+  }, []);
 
   const goToNextOrFinish = useCallback(() => {
     rewardVideoRef.current?.pause();
@@ -366,45 +398,91 @@ export default function Home() {
     };
   }, [screen, selectedId, timedOut, handleTimeout]);
 
+  // Result screen: try video first; if it fails or times out, fall back
+  // to a real photo; if that also fails, the UI falls back to the emoji.
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
-    if (currentAnimal.id === "koala") return;
 
     let cancelled = false;
     const query = animalQueryMap[currentAnimal.id] ?? currentAnimal.name;
     setVideoLoading(true);
+    setResultImageLoading(false);
 
     fetchAnimalVideo(query).then((url) => {
       if (cancelled) return;
       setVideoLoading(false);
-      if (url) setVideoUrl(url);
-      else setVideoFailed(true);
+      if (url) {
+        setVideoUrl(url);
+      } else {
+        setVideoFailed(true);
+        if (!photoCacheRef.current[currentAnimal.id]) {
+          setResultImageLoading(true);
+          ensurePhotoFor(currentAnimal.id, query);
+        }
+      }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [screen, currentAnimal]);
+  }, [screen, currentAnimal, ensurePhotoFor]);
+
+  // Once the video errors out in the browser (e.g. broken/irrelevant URL),
+  // fall back to fetching a real photo instead.
+  useEffect(() => {
+    if (!videoFailed || !currentAnimal) return;
+    if (photoCacheRef.current[currentAnimal.id]) return;
+    const query = animalQueryMap[currentAnimal.id] ?? currentAnimal.name;
+    setResultImageLoading(true);
+    ensurePhotoFor(currentAnimal.id, query);
+  }, [videoFailed, currentAnimal, ensurePhotoFor]);
+
+  useEffect(() => {
+    if (photoUrls[currentAnimal?.id ?? ""]) {
+      setResultImageLoading(false);
+    }
+  }, [photoUrls, currentAnimal]);
 
   useEffect(() => {
     if (screen !== "collection-detail" || !selectedCollectionAnimal) return;
-    if (selectedCollectionAnimal.id === "koala") return;
 
     let cancelled = false;
     const query = animalQueryMap[selectedCollectionAnimal.id] ?? selectedCollectionAnimal.name;
     setCollectionVideoLoading(true);
+    setCollectionImageLoading(false);
 
     fetchAnimalVideo(query).then((url) => {
       if (cancelled) return;
       setCollectionVideoLoading(false);
-      if (url) setCollectionVideoUrl(url);
-      else setCollectionVideoFailed(true);
+      if (url) {
+        setCollectionVideoUrl(url);
+      } else {
+        setCollectionVideoFailed(true);
+        if (!photoCacheRef.current[selectedCollectionAnimal.id]) {
+          setCollectionImageLoading(true);
+          ensurePhotoFor(selectedCollectionAnimal.id, query);
+        }
+      }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [screen, selectedCollectionAnimal]);
+  }, [screen, selectedCollectionAnimal, ensurePhotoFor]);
+
+  useEffect(() => {
+    if (!collectionVideoFailed || !selectedCollectionAnimal) return;
+    if (photoCacheRef.current[selectedCollectionAnimal.id]) return;
+    const query = animalQueryMap[selectedCollectionAnimal.id] ?? selectedCollectionAnimal.name;
+    setCollectionImageLoading(true);
+    ensurePhotoFor(selectedCollectionAnimal.id, query);
+  }, [collectionVideoFailed, selectedCollectionAnimal, ensurePhotoFor]);
+
+  useEffect(() => {
+    if (photoUrls[selectedCollectionAnimal?.id ?? ""]) {
+      setCollectionImageLoading(false);
+    }
+  }, [photoUrls, selectedCollectionAnimal]);
 
   useEffect(() => {
     if (screen !== "result" || !currentAnimal) return;
@@ -735,17 +813,7 @@ export default function Home() {
           </h2>
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
-            {selectedCollectionAnimal.id === "koala" ? (
-              photoUrls["koala"] ? (
-                <img
-                  src={photoUrls["koala"]}
-                  alt="Koala"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="text-6xl animate-pulse">⏳</div>
-              )
-            ) : collectionVideoUrl && !collectionVideoFailed ? (
+            {collectionVideoUrl && !collectionVideoFailed ? (
               <video
                 key={selectedCollectionAnimal.id}
                 src={collectionVideoUrl}
@@ -755,7 +823,20 @@ export default function Home() {
                 onError={() => setCollectionVideoFailed(true)}
                 className="w-full h-full object-cover"
               />
-            ) : collectionVideoLoading ? (
+            ) : photoUrls[selectedCollectionAnimal.id] ? (
+              <img
+                src={photoUrls[selectedCollectionAnimal.id]}
+                alt={selectedCollectionAnimal.name}
+                onError={() =>
+                  setPhotoUrls((prev) => {
+                    const next = { ...prev };
+                    delete next[selectedCollectionAnimal.id];
+                    return next;
+                  })
+                }
+                className="w-full h-full object-cover"
+              />
+            ) : collectionVideoLoading || collectionImageLoading ? (
               <div className="text-6xl animate-pulse">⏳</div>
             ) : (
               <div className="text-9xl animate-bounce">
@@ -969,17 +1050,7 @@ export default function Home() {
           </div>
 
           <div className="w-72 h-72 md:w-96 md:h-96 rounded-3xl overflow-hidden shadow-xl bg-white flex items-center justify-center">
-            {currentAnimal.id === "koala" ? (
-              photoUrls["koala"] ? (
-                <img
-                  src={photoUrls["koala"]}
-                  alt="Koala"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="text-6xl animate-pulse">⏳</div>
-              )
-            ) : videoUrl && !videoFailed ? (
+            {videoUrl && !videoFailed ? (
               <video
                 key={currentAnimal.id}
                 ref={rewardVideoRef}
@@ -990,7 +1061,20 @@ export default function Home() {
                 onError={() => setVideoFailed(true)}
                 className="w-full h-full object-cover"
               />
-            ) : videoLoading ? (
+            ) : photoUrls[currentAnimal.id] ? (
+              <img
+                src={photoUrls[currentAnimal.id]}
+                alt={currentAnimal.name}
+                onError={() =>
+                  setPhotoUrls((prev) => {
+                    const next = { ...prev };
+                    delete next[currentAnimal.id];
+                    return next;
+                  })
+                }
+                className="w-full h-full object-cover"
+              />
+            ) : videoLoading || resultImageLoading ? (
               <div className="text-6xl animate-pulse">⏳</div>
             ) : (
               <div className="text-9xl animate-bounce">
