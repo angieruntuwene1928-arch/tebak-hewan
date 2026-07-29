@@ -587,7 +587,7 @@ export default function Home() {
           )}
 
           <h1 className="text-5xl md:text-6xl font-extrabold text-white drop-shadow-[0_4px_0_rgba(0,0,0,0.2)] text-center">
-            🦁 Secret Zoo 🐘
+            🦁 Smart Zoo 🐘
           </h1>
 
           {(bestScoreEver > 0 || bestStreakEver > 0) && (
@@ -776,7 +776,7 @@ export default function Home() {
         <div className="animate-fadein relative z-10 min-h-screen flex flex-col items-center px-4 py-10 gap-6">
           <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-10 w-full max-w-2xl flex flex-col gap-6">
             <h2 className="text-3xl md:text-4xl font-extrabold text-center text-slate-700">
-              📖 Cara Bermain Tebak Hewan
+              📖 Cara Bermain Smart Zoo
             </h2>
 
             <div className="flex flex-col gap-4 text-slate-700">
