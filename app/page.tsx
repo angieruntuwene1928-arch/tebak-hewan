@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import confetti from "canvas-confetti";
-import animalsData from "../data/data-hewan.json";
+import animalsData from "./data/data-hewan.json";
 
 type Animal = {
   id: string;
